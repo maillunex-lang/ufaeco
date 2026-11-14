@@ -114,13 +114,14 @@ func _use_company(c: Dictionary) -> void:
 	_load_region(true)
 
 
-## Город растёт по игровым неделям: при смене недели подтягиваем свежую карту.
+## Города растут по игровым неделям; часы в шапке обновляются с каждым snapshot.
 func _on_snapshot(_snapshot: Dictionary) -> void:
 	_refresh_status()
 
 
 func _on_game_tick(_tick: int) -> void:
-	if company_id == "":
+	# Города и показатели меняются раз в игровую неделю — карту перезагружаем только тогда.
+	if company_id == "" or not bool(network.clock.get("is_week_start", false)):
 		return
 	if mode == "region":
 		_load_region(false)

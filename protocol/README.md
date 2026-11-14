@@ -60,7 +60,7 @@
 | `hello` | `{ server_name, protocol_version, heartbeat_interval_ms, auth_timeout_ms, max_message_size }` |
 | `auth_ok` | `{ player_id, session_id, resume_token, display_name, server_tick, heartbeat_interval_ms, reconnect_timeout_s, resumed }` |
 | `heartbeat` | `{ client_time, server_time, server_tick }` |
-| `world_snapshot` | `{ world_id, server_tick, server_time, players_online, clock, players: [{player_id, display_name}] }`; `clock` — игровые часы: `tick, month_index, week (1..4), year, month, month_name, is_month_start, is_month_end, week_started_at, next_week_at, next_month_at, server_time, speed` (моменты — мс Unix сервера) |
+| `world_snapshot` | `{ world_id, server_tick, server_time, players_online, clock, players: [{player_id, display_name}] }`; `clock` — игровые часы: `tick` (игровой день), `month_index`, `day` (1..24), `day_of_week` (1..6), `week` (1..4), `year`, `month`, `month_name`, `is_week_start/end`, `is_month_start/end`, `day_started_at`, `next_day_at`, `next_week_at`, `next_month_at`, `server_time`, `speed` (моменты — мс Unix сервера) |
 | `command_result` | `{ name, ok, duplicate, result?, error? }` |
 | `error` | `{ code, message }` (message — по-русски, для логов; клиент показывает свой текст по `code`) |
 | `disconnect` | `{ reason }` |

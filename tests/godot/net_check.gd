@@ -47,9 +47,10 @@ func _run() -> void:
 	check(client.status_text_ru() == "в сети", "статус по-русски: " + client.status_text_ru())
 
 	check(not client.clock.is_empty(), "игровые часы в snapshot")
+	check(int(client.clock.get("day", 0)) >= 1 and int(client.clock.get("day", 0)) <= 24, "день месяца 1..24: %s" % str(client.clock.get("day")))
 	check(int(client.clock.get("week", 0)) >= 1 and int(client.clock.get("week", 0)) <= 4, "неделя игры 1..4: %s" % str(client.clock.get("week")))
-	check(float(client.clock.get("next_week_at", 0)) > float(client.clock.get("server_time", 1)), "следующая неделя в будущем")
-	check(client.clock_text_ru().find("неделя") != -1, "текст часов по-русски: " + client.clock_text_ru())
+	check(float(client.clock.get("next_day_at", 0)) > float(client.clock.get("server_time", 1)), "следующий день в будущем")
+	check(client.clock_text_ru().find("день") != -1, "текст часов по-русски: " + client.clock_text_ru())
 
 	print("2. команды")
 	var rid: String = client.send_command("company.create", {"name": "Тест-" + login})

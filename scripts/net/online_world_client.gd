@@ -6,7 +6,7 @@ extends Node
 signal connection_state_changed(state: String)
 signal world_snapshot_received(snapshot: Dictionary)
 signal server_tick_changed(tick: int)
-## Началась новая игровая неделя (изменился номер игрового тика).
+## Начался новый игровой день (изменился номер игрового тика; раз в реальный час).
 signal game_tick_changed(game_tick: int)
 signal command_result_received(request_id: String, payload: Dictionary)
 signal network_error(message_ru: String)
@@ -73,7 +73,8 @@ var server_url: String = "http://127.0.0.1:8080"
 var websocket_url: String = "ws://127.0.0.1:8080/ws"
 var connected: bool = false
 var last_server_tick: int = 0
-## Игровые часы мира из snapshot: tick, year, month, month_name, week (1..4), next_week_at, next_month_at, server_time (мс Unix).
+## Игровые часы мира из snapshot: tick (игровой день), year, month, month_name, day (1..24), week (1..4), day_of_week (1..6),
+## next_day_at, next_week_at, next_month_at, server_time (мс Unix).
 var clock: Dictionary = {}
 var _clock_offset_ms: float = 0.0 # server_time − локальное время на момент получения snapshot
 var player_id: String = ""
@@ -175,13 +176,13 @@ func apply_snapshot(snapshot: Dictionary) -> void:
 	world_snapshot_received.emit(snapshot)
 
 
-## «Март 2026 • неделя 2 • до новой недели 3 ч 12 мин»; пусто, пока часы не получены.
+## «Март 2026 • день 9 (неделя 2) • новый день через 12 мин»; пусто, пока часы не получены.
 func clock_text_ru() -> String:
 	if clock.is_empty():
 		return ""
 	var now_server := Time.get_unix_time_from_system() * 1000.0 + _clock_offset_ms
-	var left_ms := maxf(float(clock["next_week_at"]) - now_server, 0.0)
-	return "%s %d • неделя %d • новая неделя через %s" % [str(clock["month_name"]), int(clock["year"]), int(clock["week"]), _duration_ru(left_ms)]
+	var left_ms := maxf(float(clock["next_day_at"]) - now_server, 0.0)
+	return "%s %d • день %d (неделя %d) • новый день через %s" % [str(clock["month_name"]), int(clock["year"]), int(clock["day"]), int(clock["week"]), _duration_ru(left_ms)]
 
 
 static func _duration_ru(ms: float) -> String:

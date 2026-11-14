@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { AddressInfo } from 'node:net';
 import { AccountService } from './accounts/index.js';
 import { describeTick, tickIndexAt, tickStartMs } from './clock/calendar.js';
-import { MONTHLY_HOOKS, TickRunner, WEEKLY_PHASES, type HookDef, type PhaseDef } from './clock/runner.js';
+import { DAILY_PHASES, MONTHLY_HOOKS, TickRunner, WEEKLY_HOOKS, type HookDef } from './clock/runner.js';
 import { CompanyService } from './companies/index.js';
 import { ensureNpcCompanies } from './companies/npc.js';
 import type { ServerConfig } from './config.js';
@@ -36,10 +36,10 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db; now?: ()
   const map = new MapService(companies);
   const region = new RegionService(loadRegionData());
 
-  // Недельный тик. Прототипная динамика городов подключена как последняя фаза (до этапа 13);
+  // Суточный тик: фазы дня пока пусты. Прототипная динамика городов — недельный хук (до этапа 13);
   // помесячная запись показателей городов (графики) — месячный хук.
-  const phases: PhaseDef[] = [
-    ...WEEKLY_PHASES,
+  const weekHooks: HookDef[] = [
+    ...WEEKLY_HOOKS,
     {
       name: 'city_dynamics',
       stage: null,
@@ -74,7 +74,7 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db; now?: ()
         }
       : h,
   );
-  const ticks: TickRunner = new TickRunner(db, { worldId: config.worldId, phases, monthHooks, now: opts.now });
+  const ticks: TickRunner = new TickRunner(db, { worldId: config.worldId, phases: DAILY_PHASES, weekHooks, monthHooks, now: opts.now });
 
   let gateway: Gateway;
   const world = new World(config.tickRate, config.snapshotRate, (s) => gateway.broadcastSnapshot(s), () => {
@@ -99,10 +99,10 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db; now?: ()
       let retry = false;
       try {
         const done = await ticks.processDue();
-        if (done.length) http.log.info({ ticks: done }, 'Выполнены недельные тики');
+        if (done.length) http.log.info({ ticks: done }, 'Выполнены игровые дни');
       } catch (e) {
         retry = true;
-        http.log.error(e, 'Ошибка недельного тика — повтор через 5 с');
+        http.log.error(e, 'Ошибка тика игрового дня — повтор через 5 с');
       }
       if (retry) scheduler = setTimeout(scheduleTicks, 5000);
       else scheduleTicks();

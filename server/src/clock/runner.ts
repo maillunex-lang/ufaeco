@@ -3,16 +3,17 @@ import { writeAudit } from '../persistence/audit.js';
 import { withTransaction, type Db, type Queryable } from '../persistence/db.js';
 import { mulberry32 } from '../world_map/generator.js';
 import {
-  alignToMonthStart, clockInfo, describeTick, tickIndexAt, tickStartMs, TICKS_PER_YEAR, WEEKS_PER_MONTH,
+  alignToMonthStart, clockInfo, DAYS_PER_MONTH, DAYS_PER_WEEK, DAYS_PER_YEAR, describeTick, tickIndexAt, tickStartMs,
   type ClockParams, type GameClockInfo, type GameDate,
 } from './calendar.js';
 
 export interface TickContext {
   tx: Queryable;
   worldId: string;
-  /** номер тика: начало недели n, рассчитывается завершившаяся неделя n−1 */
+  /** номер тика: начало игрового дня n, рассчитывается завершившийся день n−1 */
   tick: number;
-  completedWeek: GameDate;
+  /** завершившийся игровой день */
+  completed: GameDate;
   /** детерминированный ГСЧ по (seed мира, тик, фаза) */
   rng: () => number;
   seed: number;
@@ -27,15 +28,14 @@ export interface PhaseDef {
   run?: PhaseHandler;
 }
 
-/** Фазы недели в фиксированном порядке (docs/TIME_MODEL.md). Нереализованные помечаются в сводке тика. */
-export const WEEKLY_PHASES: PhaseDef[] = [
+/** Фазы игрового дня в фиксированном порядке (docs/TIME_MODEL.md). Нереализованные помечаются в сводке тика. */
+export const DAILY_PHASES: PhaseDef[] = [
   { name: 'construction', stage: 4 },
   { name: 'extraction', stage: 5 },
   { name: 'production', stage: 7 },
   { name: 'supply', stage: 8 },
   { name: 'retail', stage: 9 },
   { name: 'rent_and_wages', stage: 12 },
-  { name: 'ai_and_policies', stage: 15 },
   { name: 'events', stage: 13 },
 ];
 
@@ -45,7 +45,14 @@ export interface HookDef {
   run?: PhaseHandler;
 }
 
-/** Месячные операции (после недели 4, в момент начала нового месяца). */
+/** Недельные операции (каждый 6-й игровой день, в момент начала новой недели). */
+export const WEEKLY_HOOKS: HookDef[] = [
+  { name: 'demand_and_market_share', stage: 9 },
+  { name: 'brand_decay', stage: 10 },
+  { name: 'policies_and_ai', stage: 15 },
+];
+
+/** Месячные операции (каждый 24-й игровой день, в момент начала нового месяца). */
 export const MONTHLY_HOOKS: HookDef[] = [
   { name: 'taxes_and_interest', stage: 14 },
   { name: 'financial_reports', stage: 3 },
@@ -62,6 +69,7 @@ export const YEARLY_HOOKS: HookDef[] = [
 export interface RunnerOptions {
   worldId: string;
   phases?: PhaseDef[];
+  weekHooks?: HookDef[];
   monthHooks?: HookDef[];
   yearHooks?: HookDef[];
   /** источник времени; в тестах подменяется */
@@ -85,6 +93,7 @@ export class TickRunner {
   private params: ClockParams | null = null;
   private seed = 0;
   private readonly phases: PhaseDef[];
+  private readonly weekHooks: HookDef[];
   private readonly monthHooks: HookDef[];
   private readonly yearHooks: HookDef[];
   private readonly now: () => number;
@@ -92,7 +101,8 @@ export class TickRunner {
 
   constructor(private readonly db: Db, opts: RunnerOptions) {
     this.worldId = opts.worldId;
-    this.phases = opts.phases ?? WEEKLY_PHASES;
+    this.phases = opts.phases ?? DAILY_PHASES;
+    this.weekHooks = opts.weekHooks ?? WEEKLY_HOOKS;
     this.monthHooks = opts.monthHooks ?? MONTHLY_HOOKS;
     this.yearHooks = opts.yearHooks ?? YEARLY_HOOKS;
     this.now = opts.now ?? Date.now;
@@ -103,7 +113,8 @@ export class TickRunner {
    * Скорость времени в существующем мире менять нельзя (ошибка с подсказкой про `world:reset`); боевое значение — 1.
    */
   async ensureClock(init: ClockInit): Promise<ClockParams> {
-    const epoch = init.epochMs ?? alignToMonthStart(this.now());
+    // Боевой мир (скорость 1) стартует с ближайшего 09:00 по Уфе; ускоренный dev-мир — с текущего момента (иначе сразу «прошли» бы годы).
+    const epoch = init.epochMs ?? (init.speed === 1 ? alignToMonthStart(this.now()) : this.now());
     const p: ClockParams = { epochMs: epoch, speed: init.speed, startYear: init.startYear, startMonth: init.startMonth };
     await withTransaction(this.db, async (tx) => {
       await tx.query('SELECT pg_advisory_xact_lock($1)', [lockKey(this.worldId)]);
@@ -160,10 +171,10 @@ export class TickRunner {
   }
 
   /**
-   * Выполняет все наступившие, но не обработанные тики по порядку (максимум maxTicks за вызов).
+   * Выполняет все наступившие, но не обработанные тики (игровые дни) по порядку (максимум maxTicks за вызов).
    * Параллельные вызовы безопасны: тик выполняется ровно один раз.
    */
-  async processDue(maxTicks = 16): Promise<number[]> {
+  async processDue(maxTicks = 48): Promise<number[]> {
     const done: number[] = [];
     while (done.length < maxTicks) {
       const due = this.currentTick();
@@ -184,9 +195,9 @@ export class TickRunner {
       const p = this.clock;
       const completed = describeTick(p, tick - 1);
       const ctxFor = (name: string): TickContext => ({
-        tx, worldId: this.worldId, tick, completedWeek: completed, seed: this.seed, rng: mulberry32(phaseSeed(this.seed, tick, name)),
+        tx, worldId: this.worldId, tick, completed, seed: this.seed, rng: mulberry32(phaseSeed(this.seed, tick, name)),
       });
-      const summary: { phases: unknown[]; month?: unknown[]; year?: unknown[] } = { phases: [] };
+      const summary: { phases: unknown[]; week?: unknown[]; month?: unknown[]; year?: unknown[] } = { phases: [] };
       const exec = async (list: { name: string; stage: number | null; run?: PhaseHandler }[], out: unknown[]) => {
         for (const ph of list) {
           const t0 = Date.now();
@@ -199,24 +210,28 @@ export class TickRunner {
         }
       };
       await exec(this.phases, summary.phases);
-      if (tick % WEEKS_PER_MONTH === 0) {
+      if (tick % DAYS_PER_WEEK === 0) {
+        summary.week = [];
+        await exec(this.weekHooks, summary.week);
+      }
+      if (tick % DAYS_PER_MONTH === 0) {
         summary.month = [];
         await exec(this.monthHooks, summary.month);
       }
-      if (tick % TICKS_PER_YEAR === 0) {
+      if (tick % DAYS_PER_YEAR === 0) {
         summary.year = [];
         await exec(this.yearHooks, summary.year);
       }
       await tx.query(
-        `INSERT INTO world_ticks (world_id, tick, week, month_index, started_at, finished_at, duration_ms, summary)
-         VALUES ($1, $2, $3, $4, to_timestamp($5::double precision / 1000), now(), $6, $7)`,
-        [this.worldId, tick, completed.week, completed.month_index, started, Date.now() - started, JSON.stringify(summary)],
+        `INSERT INTO world_ticks (world_id, tick, week, day, month_index, started_at, finished_at, duration_ms, summary)
+         VALUES ($1, $2, $3, $4, $5, to_timestamp($6::double precision / 1000), now(), $7, $8)`,
+        [this.worldId, tick, completed.week, completed.day, completed.month_index, started, Date.now() - started, JSON.stringify(summary)],
       );
       await tx.query('UPDATE world_clock SET last_tick = $2 WHERE world_id = $1', [this.worldId, tick]);
-      const closed = tick % WEEKS_PER_MONTH === 0;
+      const closed = tick % DAYS_PER_MONTH === 0;
       await writeAudit(tx, {
         eventType: 'world_tick',
-        details: { world: this.worldId, tick, closed_week: completed.week, closed_month: closed ? completed.month_index : null },
+        details: { world: this.worldId, tick, closed_day: completed.day, closed_month: closed ? completed.month_index : null },
       });
       return tick;
     });
