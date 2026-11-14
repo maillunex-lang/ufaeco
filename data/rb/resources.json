@@ -1,0 +1,249 @@
+{
+ "approximate": true,
+ "note": "Размещение и запасы — ориентировочные гипотезы (районы по общим сведениям о геологии РБ); названия участков условные. Сверить с геологическими источниками до релиза. Запасы — в условных единицах игры.",
+ "resources": [
+  {
+   "id": "oil-1",
+   "resource": "oil",
+   "name": "Нефтяное поле «Туймазы-запад»",
+   "lat": 54.62,
+   "lon": 53.55,
+   "reserve": 900000,
+   "quality": 70
+  },
+  {
+   "id": "oil-2",
+   "resource": "oil",
+   "name": "Нефтяное поле «Туймазы-восток»",
+   "lat": 54.55,
+   "lon": 53.95,
+   "reserve": 700000,
+   "quality": 65
+  },
+  {
+   "id": "oil-3",
+   "resource": "oil",
+   "name": "Нефтяное поле «Октябрьское»",
+   "lat": 54.43,
+   "lon": 53.6,
+   "reserve": 600000,
+   "quality": 60
+  },
+  {
+   "id": "oil-4",
+   "resource": "oil",
+   "name": "Нефтяное поле «Ишимбайское»",
+   "lat": 53.4,
+   "lon": 56.1,
+   "reserve": 350000,
+   "quality": 55
+  },
+  {
+   "id": "oil-5",
+   "resource": "oil",
+   "name": "Нефтяное поле «Арланское»",
+   "lat": 56.05,
+   "lon": 54.4,
+   "reserve": 1200000,
+   "quality": 60
+  },
+  {
+   "id": "oil-6",
+   "resource": "oil",
+   "name": "Нефтяное поле «Янаульское»",
+   "lat": 56.2,
+   "lon": 54.85,
+   "reserve": 500000,
+   "quality": 50
+  },
+  {
+   "id": "oil-7",
+   "resource": "oil",
+   "name": "Нефтяное поле «Чекмагушевское»",
+   "lat": 55.1,
+   "lon": 54.7,
+   "reserve": 400000,
+   "quality": 55
+  },
+  {
+   "id": "copper_zinc-1",
+   "resource": "copper_zinc",
+   "name": "Медно-цинковое месторождение «Сибайское»",
+   "lat": 52.75,
+   "lon": 58.6,
+   "reserve": 800000,
+   "quality": 72
+  },
+  {
+   "id": "copper_zinc-2",
+   "resource": "copper_zinc",
+   "name": "Медно-цинковое месторождение «Учалинское»",
+   "lat": 54.35,
+   "lon": 59.35,
+   "reserve": 950000,
+   "quality": 75
+  },
+  {
+   "id": "copper_zinc-3",
+   "resource": "copper_zinc",
+   "name": "Медно-цинковое месторождение «Баймакское»",
+   "lat": 52.55,
+   "lon": 58.25,
+   "reserve": 500000,
+   "quality": 68
+  },
+  {
+   "id": "copper_zinc-4",
+   "resource": "copper_zinc",
+   "name": "Медно-цинковое месторождение «Подольское»",
+   "lat": 52.79,
+   "lon": 58.76,
+   "reserve": 450000,
+   "quality": 66
+  },
+  {
+   "id": "gold-1",
+   "resource": "gold",
+   "name": "Золоторудный участок «Бурзян-юг»",
+   "lat": 52.95,
+   "lon": 57.6,
+   "reserve": 60000,
+   "quality": 62
+  },
+  {
+   "id": "gold-2",
+   "resource": "gold",
+   "name": "Золоторудный участок «Учалы-восток»",
+   "lat": 54.2,
+   "lon": 59.54,
+   "reserve": 40000,
+   "quality": 58
+  },
+  {
+   "id": "gold-3",
+   "resource": "gold",
+   "name": "Золоторудный участок «Баймак-север»",
+   "lat": 52.85,
+   "lon": 58.05,
+   "reserve": 50000,
+   "quality": 64
+  },
+  {
+   "id": "iron_ore-1",
+   "resource": "iron_ore",
+   "name": "Железорудный участок «Белорецкий»",
+   "lat": 53.95,
+   "lon": 58.55,
+   "reserve": 500000,
+   "quality": 55
+  },
+  {
+   "id": "iron_ore-2",
+   "resource": "iron_ore",
+   "name": "Железорудный участок «Тукан»",
+   "lat": 53.4,
+   "lon": 58.3,
+   "reserve": 350000,
+   "quality": 52
+  },
+  {
+   "id": "limestone-1",
+   "resource": "limestone",
+   "name": "Известняковый карьер «Стерлитамак»",
+   "lat": 53.65,
+   "lon": 55.85,
+   "reserve": 2000000,
+   "quality": 70
+  },
+  {
+   "id": "limestone-2",
+   "resource": "limestone",
+   "name": "Известняковый карьер «Сибай»",
+   "lat": 52.7,
+   "lon": 58.45,
+   "reserve": 1200000,
+   "quality": 62
+  },
+  {
+   "id": "limestone-3",
+   "resource": "limestone",
+   "name": "Известняковый карьер «Уфимский»",
+   "lat": 54.85,
+   "lon": 56.15,
+   "reserve": 1500000,
+   "quality": 66
+  },
+  {
+   "id": "timber-1",
+   "resource": "timber",
+   "name": "Лесной массив «Белорецкий»",
+   "lat": 54.05,
+   "lon": 58.2,
+   "reserve": 900000,
+   "quality": 60
+  },
+  {
+   "id": "timber-2",
+   "resource": "timber",
+   "name": "Лесной массив «Бурзянский»",
+   "lat": 53.1,
+   "lon": 57.2,
+   "reserve": 800000,
+   "quality": 64
+  },
+  {
+   "id": "timber-3",
+   "resource": "timber",
+   "name": "Лесной массив «Восточный»",
+   "lat": 54.61,
+   "lon": 58.98,
+   "reserve": 700000,
+   "quality": 58
+  },
+  {
+   "id": "timber-4",
+   "resource": "timber",
+   "name": "Лесной массив «Кигинский»",
+   "lat": 55.35,
+   "lon": 58.9,
+   "reserve": 600000,
+   "quality": 55
+  },
+  {
+   "id": "timber-5",
+   "resource": "timber",
+   "name": "Лесной массив «Нуримановский»",
+   "lat": 54.91,
+   "lon": 57.08,
+   "reserve": 650000,
+   "quality": 60
+  },
+  {
+   "id": "clay_sand-1",
+   "resource": "clay_sand",
+   "name": "Песчано-глинистый карьер «Уфа»",
+   "lat": 54.65,
+   "lon": 56.25,
+   "reserve": 1000000,
+   "quality": 60
+  },
+  {
+   "id": "clay_sand-2",
+   "resource": "clay_sand",
+   "name": "Песчано-глинистый карьер «Мелеуз»",
+   "lat": 52.9,
+   "lon": 55.8,
+   "reserve": 700000,
+   "quality": 58
+  },
+  {
+   "id": "clay_sand-3",
+   "resource": "clay_sand",
+   "name": "Песчано-глинистый карьер «Туймазы»",
+   "lat": 54.7,
+   "lon": 53.85,
+   "reserve": 600000,
+   "quality": 55
+  }
+ ]
+}

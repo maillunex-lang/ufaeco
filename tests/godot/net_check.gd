@@ -68,6 +68,16 @@ func _run() -> void:
 	await wait_until(func(): return results.has(removed), 3.0)
 	check(results.get(removed, {}).get("error", {}).get("code", "") == "unknown_command", "старая торговля с NPC удалена")
 
+	print("2a. регион")
+	var reg: String = client.send_command("region.get", {})
+	await wait_until(func(): return results.has(reg), 3.0)
+	var rr: Dictionary = results.get(reg, {}).get("result", {}).get("region", {})
+	check(rr.get("cities", []).size() == 21, "region.get: 21 город")
+	check(rr.get("outline", []).size() > 100, "region.get: контур региона")
+	var fq: String = client.send_command("region.freight_quote", {"from_city": "ufa", "to_city": "sibay", "tonnes": 10})
+	await wait_until(func(): return results.has(fq), 3.0)
+	check(str(results.get(fq, {}).get("result", {}).get("quote", {}).get("best", "")) == "rail", "фрахт Уфа → Сибай выгоднее по железной дороге")
+
 	print("2b. карта")
 	var mapq: String = client.send_command("map.get_city", {"city_id": "ufa"})
 	await wait_until(func(): return results.has(mapq), 3.0)

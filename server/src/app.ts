@@ -1,8 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AddressInfo } from 'node:net';
 import { AccountService } from './accounts/index.js';
-import { tickIndexAt, tickStartMs } from './clock/calendar.js';
-import { TickRunner, WEEKLY_PHASES, type PhaseDef } from './clock/runner.js';
+import { describeTick, tickIndexAt, tickStartMs } from './clock/calendar.js';
+import { MONTHLY_HOOKS, TickRunner, WEEKLY_PHASES, type HookDef, type PhaseDef } from './clock/runner.js';
 import { CompanyService } from './companies/index.js';
 import { ensureNpcCompanies } from './companies/npc.js';
 import type { ServerConfig } from './config.js';
@@ -11,6 +11,8 @@ import { createPool, type Db } from './persistence/db.js';
 import { runMigrations } from './persistence/migrate.js';
 import { SessionService } from './sessions/index.js';
 import { World } from './world/index.js';
+import { loadRegionData } from './region/data.js';
+import { RegionService } from './region/service.js';
 import { MapService } from './world_map/service.js';
 
 export interface GameServer {
@@ -18,6 +20,7 @@ export interface GameServer {
   readonly db: Db;
   readonly world: World;
   readonly map: MapService;
+  readonly region: RegionService;
   readonly ticks: TickRunner;
   start(): Promise<{ host: string; port: number }>;
   stop(): Promise<void>;
@@ -31,28 +34,47 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db; now?: ()
   const http = Fastify({ logger: config.environment !== 'test' });
   const companies = new CompanyService();
   const map = new MapService(companies);
+  const region = new RegionService(loadRegionData());
 
-  // Недельный тик. Прототипная динамика города подключена как последняя фаза (до этапа 13).
+  // Недельный тик. Прототипная динамика городов подключена как последняя фаза (до этапа 13);
+  // помесячная запись показателей городов (графики) — месячный хук.
   const phases: PhaseDef[] = [
     ...WEEKLY_PHASES,
     {
       name: 'city_dynamics',
       stage: null,
       run: async (ctx) => {
-        // Сигналы экономики — пока число предприятий на участках (настоящие показатели появятся с этапами 7–9).
-        const r = await ctx.tx.query<{ total: string; industrial: string }>(
-          `SELECT count(*) AS total, count(*) FILTER (WHERE kind IN ('farm','elevator','mill','bakery')) AS industrial FROM enterprises WHERE lot_id IS NOT NULL`,
-        );
-        const step = await map.step(ctx.tx, ctx.tick, {
-          operatingEnterprises: Number(r.rows[0]!.total),
-          industrialEnterprises: Number(r.rows[0]!.industrial),
-          retailUnitsSold: 0,
-        });
-        return { population: step.stats.population, developed: step.developed.length, new_lots: step.new_lots.length, new_road_tiles: step.new_road_tiles };
+        // Сигналы экономики — пока число предприятий на участках города (настоящие показатели появятся с этапами 7–9).
+        const rows = (await ctx.tx.query<{ city_id: string; total: string; industrial: string }>(
+          `SELECT l.city_id, count(*) AS total, count(*) FILTER (WHERE e.kind IN ('farm','elevator','mill','bakery')) AS industrial
+             FROM enterprises e JOIN map_lots l ON l.id = e.lot_id GROUP BY l.city_id`,
+        )).rows;
+        const sig = new Map(rows.map((r) => [r.city_id, r]));
+        const detail: Record<string, { population: number; developed: number; new_lots: number }> = {};
+        for (const id of await map.cityIds(ctx.tx)) {
+          const s = sig.get(id);
+          const step = await map.step(ctx.tx, id, ctx.tick, {
+            operatingEnterprises: Number(s?.total ?? 0), industrialEnterprises: Number(s?.industrial ?? 0), retailUnitsSold: 0,
+          });
+          detail[id] = { population: step.stats.population, developed: step.developed.length, new_lots: step.new_lots.length };
+        }
+        return { cities: Object.keys(detail).length, detail };
       },
     },
   ];
-  const ticks = new TickRunner(db, { worldId: config.worldId, phases, now: opts.now });
+  const monthHooks: HookDef[] = MONTHLY_HOOKS.map((h) =>
+    h.name === 'macro_and_cities'
+      ? {
+          name: 'city_stats_history',
+          stage: null,
+          run: async (ctx) => {
+            const closed = describeTick(ticks.clock, ctx.tick - 1);
+            return { recorded: await region.recordMonthlyStats(ctx.tx, closed.month_index, closed.year, closed.month) };
+          },
+        }
+      : h,
+  );
+  const ticks: TickRunner = new TickRunner(db, { worldId: config.worldId, phases, monthHooks, now: opts.now });
 
   let gateway: Gateway;
   const world = new World(config.tickRate, config.snapshotRate, (s) => gateway.broadcastSnapshot(s), () => {
@@ -62,7 +84,7 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db; now?: ()
       return null; // часы ещё не загружены
     }
   });
-  gateway = new Gateway(config, db, accounts, sessions, world, companies, map);
+  gateway = new Gateway(config, db, accounts, sessions, world, companies, map, region);
   let sweeper: NodeJS.Timeout | undefined;
   let scheduler: NodeJS.Timeout | undefined;
   let stopped = false;
@@ -102,11 +124,12 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db; now?: ()
     db,
     world,
     map,
+    region,
     ticks,
     async start() {
       await runMigrations(db);
       await ensureNpcCompanies(db);
-      await map.bootstrap(db);
+      await map.bootstrap(db, region.data);
       await ticks.ensureClock({
         epochMs: config.worldEpochMs, speed: config.timeSpeed, startYear: config.gameStartYear,
         startMonth: config.gameStartMonth, seed: config.worldSeed,

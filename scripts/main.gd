@@ -1,9 +1,25 @@
 extends Node2D
 
 const MAP_VIEW := preload("res://scripts/map/city_map_view.gd")
+const REGION_VIEW := preload("res://scripts/map/region_map_view.gd")
+const CHART := preload("res://scripts/ui/line_chart.gd")
 
 var network: OnlineWorldClient
 var map_view: CityMapView
+var region_view: RegionMapView
+var mode := "region" # region | city
+var city_id := ""
+var city_name := ""
+var region: Dictionary = {}
+var overlay_name := ""
+var region_panel: PanelContainer
+var region_title: Label
+var region_info: Label
+var region_chart: LineChart
+var region_open: Button
+var nav_region: HBoxContainer
+var nav_city: HBoxContainer
+var legend: PanelContainer
 var company_id: String = ""
 var company_name: String = ""
 var balance_cents: int = 0
@@ -27,10 +43,18 @@ func _ready() -> void:
 	RenderingServer.set_default_clear_color(BashPalette.GREEN_DEEP.lerp(BashPalette.MINT, 0.55))
 	var ui := get_node("Hud/UI") as Control
 	ui.theme = BashTheme.build()
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.custom_minimum_size = Vector2(520, 0)
+	region_view = REGION_VIEW.new()
+	add_child(region_view)
+	region_view.city_selected.connect(_on_region_city_selected)
+	region_view.site_selected.connect(_on_region_site_selected)
 	map_view = MAP_VIEW.new()
 	map_view.viewport_size = get_viewport_rect().size
 	add_child(map_view)
 	map_view.lot_selected.connect(_on_lot_selected)
+	_build_extra_ui(ui)
+	_set_mode("region")
 	buy_button.pressed.connect(_on_buy_pressed)
 	build_button.pressed.connect(_on_build_pressed)
 	kind_option.item_selected.connect(func(_i): _update_build_button())
@@ -87,7 +111,7 @@ func _use_company(c: Dictionary) -> void:
 	balance_cents = int(c["balance_cents"])
 	map_view.my_company_id = company_id
 	_refresh_status()
-	_load_city(true)
+	_load_region(true)
 
 
 ## Город растёт по игровым неделям: при смене недели подтягиваем свежую карту.
@@ -96,15 +120,23 @@ func _on_snapshot(_snapshot: Dictionary) -> void:
 
 
 func _on_game_tick(_tick: int) -> void:
-	if company_id != "":
+	if company_id == "":
+		return
+	if mode == "region":
+		_load_region(false)
+	else:
 		_load_city(false)
 
 
 func _load_city(fit: bool) -> void:
-	_call("map.get_city", {"city_id": "ufa"}, func(r):
+	if city_id == "":
+		return
+	_call("map.get_city", {"city_id": city_id}, func(r):
 		population = int(r["city"].get("population", 0))
+		city_name = str(r["city"].get("name", city_id))
 		_refresh_status()
 		map_view.set_city(r["city"])
+		map_view.set_overlay(overlay_name)
 		if fit:
 			map_view.fit_to_view(get_viewport_rect().size)
 		_on_lot_selected(map_view.selected_lot()))
@@ -209,7 +241,167 @@ func _on_buy_pressed() -> void:
 
 
 func _refresh_status() -> void:
+	if network == null:
+		return
 	var money := "" if company_id == "" else " • %s: %s" % [company_name, BashFormat.money(balance_cents)]
-	var pop := "" if population == 0 else " • население: %s" % BashFormat.thousands(population)
+	var where := "Республика Башкортостан" if mode == "region" else city_name
+	var pop := "" if (mode == "region" or population == 0) else " • население: %s" % BashFormat.thousands(population)
 	var clock_text := network.clock_text_ru()
-	status_label.text = "Сервер: %s%s%s%s%s" % [network.status_text_ru(), "" if clock_text == "" else " • " + clock_text, pop, money, ""]
+	status_label.text = "%s • %s%s%s%s" % [where, network.status_text_ru(), "" if clock_text == "" else " • " + clock_text, pop, money]
+
+
+# ------------------------------------------------------------------ регион и навигация
+
+func _load_region(fit: bool) -> void:
+	_call("region.get", {}, func(r):
+		region = r["region"]
+		region_view.set_region(region)
+		if fit:
+			region_view.fit_to_view(get_viewport_rect().size)
+		_on_region_city_selected(region_view.selected_city))
+
+
+func _set_mode(m: String) -> void:
+	mode = m
+	var is_region := m == "region"
+	region_view.visible = is_region
+	map_view.visible = not is_region
+	region_panel.visible = is_region
+	legend.visible = is_region
+	nav_region.visible = is_region
+	nav_city.visible = not is_region
+	get_node("Hud/UI/LotPanel").visible = not is_region
+	_refresh_status()
+
+
+func _on_region_city_selected(id: String) -> void:
+	region_chart.visible = id != ""
+	region_open.visible = id != ""
+	if id == "":
+		region_title.text = "Выберите город"
+		region_info.text = "Нажмите на город или месторождение на карте региона. Перетаскивание — сдвиг, колесо или щипок — масштаб."
+		return
+	var c := region_view.city(id)
+	if c.is_empty():
+		return
+	region_title.text = str(c["name"])
+	region_info.text = "Население: %s\nСредняя зарплата: %s ₽/мес.\nЦена земли: %s за тайл\nПригодность земли для сельхоза: %d%%\nОтрасли: %s\nУчастков: %d, куплено: %d%s" % [
+		BashFormat.thousands(int(c["population"])), BashFormat.thousands(int(c["wage_rub"])),
+		BashFormat.money(int(c["land_base_cents_per_tile"])), int(float(c["farmland_index"]) * 100.0),
+		BashFormat.tags(c["specialization"]), int(c["lots"]), int(c["owned_lots"]),
+		"\nЛогистический хаб (внешний рынок)" if c.get("has_hub", false) else ""]
+	_call("city.get_stats", {"city_id": id, "months": 24}, func(r):
+		var hist: Array = r["stats"]["history"]
+		var pops: Array = []
+		for h in hist:
+			pops.append(int(h["population"]))
+		region_chart.set_data("Население по месяцам", pops))
+
+
+func _on_region_site_selected(site: Dictionary) -> void:
+	region_chart.visible = false
+	region_open.visible = false
+	region_title.text = str(site["name"])
+	region_info.text = "%s\nЗапасы: %s из %s у.е.\nКачество: %d из 100\n%s" % [
+		BashFormat.resource(str(site["resource"])), BashFormat.thousands(int(site["remaining"])), BashFormat.thousands(int(site["reserve"])),
+		int(site["quality"]), "Принадлежит компании" if site.get("owned", false) else "Свободно (освоение — на следующих этапах)"]
+
+
+func _open_city(id: String) -> void:
+	if id == "":
+		return
+	city_id = id
+	city_name = str(region_view.city(id).get("name", id))
+	map_view.selected_lot_id = ""
+	_on_lot_selected({})
+	_set_mode("city")
+	_load_city(true)
+
+
+func _back_to_region() -> void:
+	_set_mode("region")
+	_load_region(false)
+
+
+func _set_overlay(name: String) -> void:
+	overlay_name = name
+	map_view.set_overlay(name)
+
+
+func _build_extra_ui(ui: Control) -> void:
+	# Панель региона (справа внизу, на месте панели участка)
+	region_panel = PanelContainer.new()
+	region_panel.position = Vector2(920, 190)
+	region_panel.size = Vector2(340, 510)
+	ui.add_child(region_panel)
+	var box := VBoxContainer.new()
+	region_panel.add_child(box)
+	region_title = Label.new()
+	region_title.add_theme_font_size_override("font_size", 22)
+	region_title.text = "Выберите город"
+	box.add_child(region_title)
+	region_info = Label.new()
+	region_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	region_info.custom_minimum_size = Vector2(300, 0)
+	box.add_child(region_info)
+	region_chart = CHART.new()
+	region_chart.custom_minimum_size = Vector2(300, 110)
+	region_chart.visible = false
+	box.add_child(region_chart)
+	region_open = Button.new()
+	region_open.text = "Открыть город"
+	region_open.custom_minimum_size = Vector2(0, 56)
+	region_open.visible = false
+	region_open.pressed.connect(func(): _open_city(region_view.selected_city))
+	box.add_child(region_open)
+	# Слои региона
+	nav_region = HBoxContainer.new()
+	nav_region.position = Vector2(580, 24)
+	ui.add_child(nav_region)
+	for item in [["roads", "Дороги"], ["rails", "Ж/д"], ["resources", "Ресурсы"], ["hubs", "Хабы"]]:
+		var cb := CheckButton.new()
+		cb.text = item[1]
+		cb.button_pressed = true
+		var key: String = item[0]
+		cb.toggled.connect(func(on): region_view.set_layer(key, on))
+		nav_region.add_child(cb)
+	# Навигация города
+	nav_city = HBoxContainer.new()
+	nav_city.position = Vector2(580, 24)
+	ui.add_child(nav_city)
+	var back := Button.new()
+	back.text = "← Регион"
+	back.custom_minimum_size = Vector2(140, 48)
+	back.pressed.connect(_back_to_region)
+	nav_city.add_child(back)
+	var group := ButtonGroup.new()
+	for item in [["", "Без слоя"], ["land", "Стоимость земли"], ["traffic", "Трафик"]]:
+		var b := Button.new()
+		b.text = item[1]
+		b.toggle_mode = true
+		b.button_group = group
+		b.custom_minimum_size = Vector2(0, 48)
+		b.button_pressed = item[0] == ""
+		var key: String = item[0]
+		b.pressed.connect(func(): _set_overlay(key))
+		nav_city.add_child(b)
+	# Легенда ресурсов
+	legend = PanelContainer.new()
+	legend.position = Vector2(24, 470)
+	ui.add_child(legend)
+	var lv := VBoxContainer.new()
+	legend.add_child(lv)
+	var lt := Label.new()
+	lt.text = "Ресурсы"
+	lv.add_child(lt)
+	for k in RegionMapView.RESOURCE_COLORS:
+		var row := HBoxContainer.new()
+		var dot := ColorRect.new()
+		dot.color = RegionMapView.RESOURCE_COLORS[k]
+		dot.custom_minimum_size = Vector2(14, 14)
+		row.add_child(dot)
+		var l := Label.new()
+		l.text = " " + BashFormat.resource(k)
+		l.add_theme_font_size_override("font_size", 14)
+		row.add_child(l)
+		lv.add_child(row)

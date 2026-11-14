@@ -29,7 +29,10 @@
     "enterprise.create",
     "map.get_city",
     "map.buy_lot",
-    "catalog.get"
+    "catalog.get",
+    "region.get",
+    "region.freight_quote",
+    "city.get_stats"
   ],
   "error_codes": [
     "invalid_message",

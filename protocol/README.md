@@ -80,6 +80,9 @@
 | `company.get` | `{ company_id }` | `company, inventory, enterprises` (только владелец) |
 | `company.journal` | `{ company_id, limit?: 1..100 }` | `entries` (новые первыми) |
 | `enterprise.create` | `{ company_id, kind, name, lot_id? }` | `enterprise`; с `lot_id` — постройка на своём участке (зонирование, один объект на участок), без — устаревший режим без привязки к карте |
+| `region.get` | `{}` | `region`: контур и реки, `cities` (динамическое население), `roads`/`rails` с длинами, `hubs`, `resources` (запасы, владелец) |
+| `region.freight_quote` | `{ from_city, to_city, tonnes? }` | `quote`: авто и ж/д (км, путь, ₽ за тонну), лучший способ, итог |
+| `city.get_stats` | `{ city_id, months?: 1..60 }` | `stats`: население, зарплата и помесячная история (графики) |
 | `catalog.get` | `{}` | `enterprise_kinds`: вид, стоимость, допустимые зоны |
 | `map.get_city` | `{ city_id }` | `city`: `width, height, center, tiles[], population, housing_cap, jobs, growth_day, lots[]` — участок: `id, x, y, w, h, zone, development (0..3), for_sale, price_cents, владелец, building` |
 | `map.buy_lot` | `{ company_id, lot_id }` | `purchase` (цена задана сервером; парки и занятые участки не продаются) |

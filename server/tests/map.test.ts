@@ -5,6 +5,7 @@ import { CompanyService } from '../src/companies/index.js';
 import { ensureNpcCompanies, NPC } from '../src/companies/npc.js';
 import { createPool, withTransaction, type Db } from '../src/persistence/db.js';
 import { runMigrations } from '../src/persistence/migrate.js';
+import { loadRegionData } from '../src/region/data.js';
 import { MapService } from '../src/world_map/service.js';
 import { startServer, TEST_DB_URL, TestClient } from './helpers.js';
 
@@ -26,7 +27,7 @@ describe('сервис карты и покупка участков', () => {
     db = createPool(TEST_DB_URL);
     await runMigrations(db);
     await ensureNpcCompanies(db);
-    await map.bootstrap(db);
+    await map.bootstrap(db, loadRegionData());
   });
   afterAll(async () => { await db.end(); });
 
@@ -43,8 +44,8 @@ describe('сервис карты и покупка участков', () => {
 
   it('bootstrap идемпотентен: повторный запуск ничего не меняет, id участков уникальны', async () => {
     const before = await tx((t) => map.getCity(t, 'ufa'));
-    await map.bootstrap(db);
-    await map.bootstrap(db);
+    await map.bootstrap(db, loadRegionData());
+    await map.bootstrap(db, loadRegionData());
     const after = await tx((t) => map.getCity(t, 'ufa'));
     expect(after.tiles).toEqual(before.tiles);
     expect(after.lots).toHaveLength(before.lots.length);
@@ -115,7 +116,7 @@ describe('рост города в БД (недельный шаг)', () => {
     db = createPool(TEST_DB_URL);
     await runMigrations(db);
     await ensureNpcCompanies(db);
-    await map.bootstrap(db);
+    await map.bootstrap(db, loadRegionData());
   });
   afterAll(async () => { await db.end(); });
   const tx = <T>(fn: Parameters<typeof withTransaction<T>>[1]) => withTransaction(db, fn);
@@ -124,7 +125,7 @@ describe('рост города в БД (недельный шаг)', () => {
     const before = await tx((t) => map.getCity(t, 'ufa'));
     let grown = false;
     for (let i = 0; i < 60 && !grown; i++) {
-      const s = await tx((t) => map.step(t, before.growth_day + 1 + i, { operatingEnterprises: 0, industrialEnterprises: 0, retailUnitsSold: 0 }));
+      const s = await tx((t) => map.step(t, 'ufa', before.growth_day + 1 + i, { operatingEnterprises: 0, industrialEnterprises: 0, retailUnitsSold: 0 }));
       grown = s.new_lots.length > 0;
     }
     const after = await tx((t) => map.getCity(t, 'ufa'));
@@ -154,14 +155,14 @@ describe('рост города в БД (недельный шаг)', () => {
       await tx((t) => map.buyLot(t, co.playerId, co.companyId, lot.id));
       mine.push(lot.id);
     }
-    await db.query('UPDATE cities SET population = 6000 WHERE id = $1', ['ufa']);
-    for (let i = 0; i < 25; i++) await tx((t) => map.step(t, Date.now() % 1_000_000 + i, { operatingEnterprises: 0, industrialEnterprises: 0, retailUnitsSold: 0 }));
+    await db.query('UPDATE cities SET population = base_population * 2 WHERE id = $1', ['ufa']);
+    for (let i = 0; i < 25; i++) await tx((t) => map.step(t, 'ufa', Date.now() % 1_000_000 + i, { operatingEnterprises: 0, industrialEnterprises: 0, retailUnitsSold: 0 }));
     const rows = (await db.query('SELECT id, development FROM map_lots WHERE id = ANY($1)', [mine])).rows;
     expect(rows.every((r) => r.development === 0)).toBe(true);
     const vac = (await db.query("SELECT price_cents, base_price_cents FROM map_lots WHERE city_id='ufa' AND owner_company_id IS NULL AND development = 0 AND zone <> 'park' LIMIT 20")).rows;
     expect(vac.length).toBeGreaterThan(0);
-    const pop = Number((await db.query("SELECT population p FROM cities WHERE id='ufa'")).rows[0].p);
-    const factor = Math.max(0.7, Math.min(3, 0.7 + 0.8 * (pop / 2000)));
+    const row = (await db.query("SELECT population p, base_population b FROM cities WHERE id='ufa'")).rows[0];
+    const factor = Math.max(0.7, Math.min(3, 0.7 + 0.8 * (Number(row.p) / Number(row.b))));
     for (const v of vac) expect(Number(v.price_cents)).toBe(Math.max(1, Math.round(Number(v.base_price_cents) * factor)));
   });
 });

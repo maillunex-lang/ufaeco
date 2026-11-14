@@ -1,7 +1,6 @@
 import { growStreets, MAX_DEVELOPMENT, mulberry32, distToCenter, type CityState, type Lot, type Zone } from './generator.js';
 
 /** Параметры роста города. ВСЕ ЧИСЛА — ГИПОТЕЗЫ. */
-export const CAPACITY_PER_TILE_LEVEL = 4; // жителей на тайл жилой застройки за уровень
 export const JOBS_PER_ENTERPRISE = 20;
 export const JOBS_PER_COMMERCIAL_TILE_LEVEL = 3;
 export const POPULATION_REFERENCE = 2000;
@@ -32,17 +31,24 @@ export interface CityStep {
 
 const area = (l: Lot) => l.w * l.h;
 
-export function housingCap(lots: Lot[]): number {
-  return lots.reduce((s, l) => (l.zone === 'residential' ? s + l.development * area(l) * CAPACITY_PER_TILE_LEVEL : s), 0);
+export function housingCap(lots: Lot[], capacityPerTile = 4): number {
+  return lots.reduce((s, l) => (l.zone === 'residential' ? s + l.development * area(l) * capacityPerTile : s), 0);
 }
 
 export function commercialJobs(lots: Lot[]): number {
   return lots.reduce((s, l) => (l.zone === 'commercial' ? s + l.development * area(l) * JOBS_PER_COMMERCIAL_TILE_LEVEL : s), 0);
 }
 
-export const initialPopulation = (lots: Lot[]): number => Math.round(housingCap(lots) * 0.85);
+export const initialPopulation = (lots: Lot[], capacityPerTile = 4): number => Math.round(housingCap(lots, capacityPerTile) * 0.85);
 
-export const priceFactor = (population: number): number => Math.max(0.7, Math.min(3, 0.7 + 0.8 * (population / POPULATION_REFERENCE)));
+/** Вместимость на тайл за уровень, при которой стартовое население города равно заданному. */
+export function calibrateCapacity(lots: Lot[], population: number): number {
+  const tiles = lots.reduce((s, l) => (l.zone === 'residential' ? s + l.development * area(l) : s), 0);
+  return tiles > 0 ? Math.max(1, population / (0.85 * tiles)) : 4;
+}
+
+export const priceFactor = (population: number, reference = POPULATION_REFERENCE): number =>
+  Math.max(0.7, Math.min(3, 0.7 + 0.8 * (population / Math.max(1, reference))));
 
 export const breadDemand = (population: number): number => Math.max(100, Math.floor(population * BREAD_PER_CITIZEN));
 
@@ -60,11 +66,12 @@ function pickZone(rng: () => number, w: Record<Zone, number>): Zone {
  * на свободных участках (не принадлежащих компаниям) и при нехватке земли прокладывает новые улицы.
  * Мутирует st (тайлы, участки). Детерминирован по (seed, day).
  */
-export function stepCity(st: CityState, prev: CityStats, sig: GrowthSignals, day: number): CityStep {
+export function stepCity(st: CityState, prev: CityStats, sig: GrowthSignals, day: number, populationReference = POPULATION_REFERENCE): CityStep {
   const rng = mulberry32((st.seed ^ Math.imul(day + 1, 0x9e3779b1)) >>> 0);
-  const cap = housingCap(st.lots);
+  const cpt = st.params.capacityPerTile;
+  const cap = housingCap(st.lots, cpt);
   const jobs = sig.operatingEnterprises * JOBS_PER_ENTERPRISE + commercialJobs(st.lots);
-  const target = Math.min(cap, 0.7 * cap + jobs * 1.5);
+  const target = Math.min(cap, 0.85 * cap + jobs * 1.5 * (cpt / 4));
   const delta = target - prev.population;
   const population = Math.max(0, prev.population + (Math.abs(delta) < 1 ? 0 : Math.sign(delta) * Math.max(1, Math.round(Math.abs(delta) * 0.08))));
 
@@ -102,10 +109,10 @@ export function stepCity(st: CityState, prev: CityStats, sig: GrowthSignals, day
     newRoad = growStreets(st, rng, vacant < 6 ? 2 : 1).newRoadTiles;
   }
   const new_lots = st.lots.slice(before);
-  const cap2 = housingCap(st.lots);
+  const cap2 = housingCap(st.lots, cpt);
   return {
     day, construction_points: points, developed, new_lots, new_road_tiles: newRoad,
-    stats: { population, housing_cap: cap2, jobs: sig.operatingEnterprises * JOBS_PER_ENTERPRISE + commercialJobs(st.lots) },
-    price_factor: priceFactor(population),
+    stats: { population, housing_cap: Math.round(cap2), jobs: Math.round(sig.operatingEnterprises * JOBS_PER_ENTERPRISE + commercialJobs(st.lots)) },
+    price_factor: priceFactor(population, populationReference),
   };
 }

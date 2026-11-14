@@ -60,3 +60,33 @@ static func recipe(r) -> String:
 	if r == null:
 		return ""
 	return "%s → %s в день" % [goods(r["inputs"]), goods(r["outputs"])]
+
+const RESOURCE_RU := {
+	"oil": "Нефть",
+	"copper_zinc": "Медно-цинковая руда",
+	"gold": "Золото",
+	"iron_ore": "Железная руда",
+	"limestone": "Известняк",
+	"timber": "Лес",
+	"clay_sand": "Песок и глина",
+}
+
+const TAG_RU := {
+	"oil_refining": "нефтепереработка", "machinery": "машиностроение", "services": "услуги", "education": "образование",
+	"chemicals": "химия", "soda": "сода", "petrochemicals": "нефтехимия", "gas_processing": "газопереработка",
+	"trucks": "грузовики", "oil": "нефть", "oil_services": "нефтесервис", "metallurgy": "металлургия",
+	"timber": "лесная отрасль", "tourism": "туризм", "aviation": "авиастроение", "brown_coal": "бурый уголь",
+	"copper_zinc": "медь и цинк", "mining": "горнодобыча", "agro": "агросектор", "food": "пищевая промышленность",
+	"glass": "стекло", "light_industry": "лёгкая промышленность", "copper": "медь", "power": "энергетика",
+	"grain": "зерно", "gold": "золото", "rail_hub": "ж/д-узел", "sugar": "сахар",
+}
+
+static func resource(k: String) -> String:
+	return RESOURCE_RU.get(k, k)
+
+
+static func tags(list: Array) -> String:
+	var out: Array[String] = []
+	for t in list:
+		out.append(TAG_RU.get(t, str(t)))
+	return ", ".join(out)

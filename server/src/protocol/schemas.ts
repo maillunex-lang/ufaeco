@@ -65,6 +65,13 @@ export const commandArgSchemas = {
   'company.get': z.strictObject({ company_id: uuid }),
   'company.journal': z.strictObject({ company_id: uuid, limit: z.number().int().min(1).max(100).optional() }),
   'catalog.get': z.strictObject({}),
+  'region.get': z.strictObject({}),
+  'region.freight_quote': z.strictObject({
+    from_city: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+    to_city: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+    tonnes: z.number().min(0.1).max(100_000).optional(),
+  }),
+  'city.get_stats': z.strictObject({ city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/), months: z.number().int().min(1).max(60).optional() }),
   'map.get_city': z.strictObject({ city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/) }),
   'map.buy_lot': z.strictObject({ company_id: uuid, lot_id: z.string().regex(/^[a-z0-9_-]{1,64}$/) }),
   'enterprise.create': z.strictObject({

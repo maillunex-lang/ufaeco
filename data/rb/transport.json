@@ -1,0 +1,262 @@
+{
+ "schematic": true,
+ "note": "Схема основных коридоров, не точная геометрия: автодороги — отрезки между соседними городами (длина = дуга большого круга × коэффициент извилистости), железные дороги — условная сеть. Хабы — аналог «портов» Capitalism (внешний рынок); gateway — направление внешнего мира.",
+ "road_winding_factor": 1.25,
+ "rail_winding_factor": 1.18,
+ "freight": {
+  "road": {
+   "fixed_cents_per_tonne": 5000,
+   "cents_per_tonne_km": 450
+  },
+  "rail": {
+   "fixed_cents_per_tonne": 40000,
+   "cents_per_tonne_km": 160
+  }
+ },
+ "roads": [
+  [
+   "ufa",
+   "chishmy"
+  ],
+  [
+   "chishmy",
+   "davlekanovo"
+  ],
+  [
+   "davlekanovo",
+   "belebey"
+  ],
+  [
+   "belebey",
+   "tuymazy"
+  ],
+  [
+   "tuymazy",
+   "oktyabrsky"
+  ],
+  [
+   "ufa",
+   "tuymazy"
+  ],
+  [
+   "ufa",
+   "blagoveshchensk"
+  ],
+  [
+   "blagoveshchensk",
+   "birsk"
+  ],
+  [
+   "ufa",
+   "birsk"
+  ],
+  [
+   "birsk",
+   "dyurtyuli"
+  ],
+  [
+   "dyurtyuli",
+   "neftekamsk"
+  ],
+  [
+   "neftekamsk",
+   "yanaul"
+  ],
+  [
+   "neftekamsk",
+   "agidel"
+  ],
+  [
+   "dyurtyuli",
+   "blagoveshchensk"
+  ],
+  [
+   "ufa",
+   "sterlitamak"
+  ],
+  [
+   "sterlitamak",
+   "salavat"
+  ],
+  [
+   "salavat",
+   "ishimbay"
+  ],
+  [
+   "sterlitamak",
+   "ishimbay"
+  ],
+  [
+   "sterlitamak",
+   "meleuz"
+  ],
+  [
+   "meleuz",
+   "kumertau"
+  ],
+  [
+   "kumertau",
+   "sibay"
+  ],
+  [
+   "sterlitamak",
+   "beloretsk"
+  ],
+  [
+   "ishimbay",
+   "beloretsk"
+  ],
+  [
+   "beloretsk",
+   "uchaly"
+  ],
+  [
+   "sibay",
+   "uchaly"
+  ],
+  [
+   "sibay",
+   "baymak"
+  ],
+  [
+   "kumertau",
+   "baymak"
+  ],
+  [
+   "ufa",
+   "beloretsk"
+  ],
+  [
+   "oktyabrsky",
+   "neftekamsk"
+  ],
+  [
+   "tuymazy",
+   "agidel"
+  ]
+ ],
+ "rails": [
+  [
+   "ufa",
+   "chishmy"
+  ],
+  [
+   "chishmy",
+   "tuymazy"
+  ],
+  [
+   "tuymazy",
+   "oktyabrsky"
+  ],
+  [
+   "ufa",
+   "sterlitamak"
+  ],
+  [
+   "sterlitamak",
+   "salavat"
+  ],
+  [
+   "salavat",
+   "ishimbay"
+  ],
+  [
+   "sterlitamak",
+   "meleuz"
+  ],
+  [
+   "meleuz",
+   "kumertau"
+  ],
+  [
+   "sterlitamak",
+   "beloretsk"
+  ],
+  [
+   "sibay",
+   "uchaly"
+  ],
+  [
+   "sibay",
+   "baymak"
+  ],
+  [
+   "ufa",
+   "birsk"
+  ],
+  [
+   "birsk",
+   "dyurtyuli"
+  ],
+  [
+   "dyurtyuli",
+   "neftekamsk"
+  ],
+  [
+   "neftekamsk",
+   "yanaul"
+  ],
+  [
+   "kumertau",
+   "sibay"
+  ]
+ ],
+ "hubs": [
+  {
+   "id": "hub-ufa",
+   "city": "ufa",
+   "kind": "mixed",
+   "gateway": "west",
+   "gateway_km": 1350,
+   "name": "Уфимский железнодорожный узел"
+  },
+  {
+   "id": "hub-chishmy",
+   "city": "chishmy",
+   "kind": "industrial",
+   "gateway": "west",
+   "gateway_km": 1250,
+   "name": "Станция Чишмы (сырьё и полуфабрикаты)"
+  },
+  {
+   "id": "hub-sterlitamak",
+   "city": "sterlitamak",
+   "kind": "mixed",
+   "gateway": "south",
+   "gateway_km": 600,
+   "name": "Стерлитамакский терминал"
+  },
+  {
+   "id": "hub-salavat",
+   "city": "salavat",
+   "kind": "industrial",
+   "gateway": "south",
+   "gateway_km": 650,
+   "name": "Салаватский химический терминал"
+  },
+  {
+   "id": "hub-beloretsk",
+   "city": "beloretsk",
+   "kind": "industrial",
+   "gateway": "east",
+   "gateway_km": 250,
+   "name": "Белорецкий терминал (направление Магнитогорск)"
+  },
+  {
+   "id": "hub-sibay",
+   "city": "sibay",
+   "kind": "industrial",
+   "gateway": "east",
+   "gateway_km": 300,
+   "name": "Сибайский рудный терминал"
+  },
+  {
+   "id": "hub-neftekamsk",
+   "city": "neftekamsk",
+   "kind": "commercial",
+   "gateway": "north",
+   "gateway_km": 300,
+   "name": "Нефтекамский торговый терминал (направление Пермь)"
+  }
+ ]
+}

@@ -6,6 +6,7 @@ import { ENTERPRISE_KINDS, ENTERPRISE_ZONES } from '../src/companies/catalog.js'
 import { ensureNpcCompanies } from '../src/companies/npc.js';
 import { createPool, withTransaction, type Db } from '../src/persistence/db.js';
 import { runMigrations } from '../src/persistence/migrate.js';
+import { loadRegionData } from '../src/region/data.js';
 import { MapService } from '../src/world_map/service.js';
 import { startServer, TEST_DB_URL, TestClient } from './helpers.js';
 
@@ -18,7 +19,7 @@ beforeAll(async () => {
   db = createPool(TEST_DB_URL);
   await runMigrations(db);
   await ensureNpcCompanies(db);
-  await map.bootstrap(db);
+  await map.bootstrap(db, loadRegionData());
   // Тестовая БД одноразовая: освобождаем участки (и здания на них), чтобы прогоны не исчерпали карту.
   await db.query('UPDATE enterprises SET lot_id = NULL WHERE lot_id IS NOT NULL');
   await db.query("UPDATE map_lots SET owner_company_id = NULL, bought_at = NULL, development = 0 WHERE zone <> 'park'");
