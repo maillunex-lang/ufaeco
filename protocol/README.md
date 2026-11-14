@@ -79,11 +79,11 @@
 | `company.list` | `{}` | `companies` (только свои) |
 | `company.get` | `{ company_id }` | `company, inventory, enterprises` (только владелец) |
 | `company.journal` | `{ company_id, limit?: 1..100 }` | `entries` (новые первыми) |
-| `enterprise.create` | `{ company_id, kind, name }` | `enterprise` (стоимость списывается с баланса) |
+| `enterprise.create` | `{ company_id, kind, name, lot_id? }` | `enterprise`; с `lot_id` — постройка на своём участке (зонирование, один объект на участок), без — устаревший режим без привязки к карте |
 | `economy.get_catalog` | `{}` | товары, виды предприятий (стоимость, зарплата, рецепт), параметры |
 | `economy.get_prices` | `{}` | `economy_day`, `prices` (цена, базовая, последние спрос/предложение) |
 | `economy.trade` | `{ company_id, product_id, side: buy\|sell, quantity: 1..10000 }` | сделка с NPC-торговым домом по цене ± спред; цену клиент не задаёт |
-| `map.get_city` | `{ city_id }` | `city`: `width, height, tiles[], lots[]` (id, x, y, w, h, zone, price_cents, владелец) |
+| `map.get_city` | `{ city_id }` | `city`: `width, height, tiles[], lots[]` (id, x, y, w, h, zone, price_cents, владелец, `building`: {enterprise_id, kind, name} или null) |
 | `map.buy_lot` | `{ company_id, lot_id }` | `purchase` (цена задана сервером; парки и занятые участки не продаются) |
 | `bank.get_loan` | `{ company_id }` | `loan_cents` |
 | `bank.take_loan` | `{ company_id, amount_cents }` | `loan` |

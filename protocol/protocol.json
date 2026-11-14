@@ -67,7 +67,10 @@
     "loan_limit_exceeded",
     "invalid_amount",
     "lot_taken",
-    "lot_not_for_sale"
+    "lot_not_for_sale",
+    "lot_not_owned",
+    "lot_occupied",
+    "zoning_violation"
   ],
   "disconnect_reasons": [
     "client_closing",

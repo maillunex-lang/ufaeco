@@ -52,5 +52,8 @@ export const ERROR_MESSAGES_RU: Record<string, string> = {
   invalid_amount: 'Неверная сумма',
   lot_taken: 'Участок уже занят',
   lot_not_for_sale: 'Участок не продаётся',
+  lot_not_owned: 'Участок вам не принадлежит',
+  lot_occupied: 'На участке уже есть здание',
+  zoning_violation: 'Это здание нельзя строить в данной зоне',
   internal_error: 'Внутренняя ошибка сервера',
 };

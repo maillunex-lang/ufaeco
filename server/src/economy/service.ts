@@ -1,5 +1,5 @@
 import { CompanyService } from '../companies/index.js';
-import { ENTERPRISE_KINDS, PRODUCTS, type EnterpriseKind, type ProductId } from '../companies/catalog.js';
+import { ENTERPRISE_KINDS, ENTERPRISE_ZONES, PRODUCTS, type EnterpriseKind, type ProductId } from '../companies/catalog.js';
 import { DomainError } from '../errors.js';
 import { writeAudit } from '../persistence/audit.js';
 import { withTransaction, type Db, type Queryable } from '../persistence/db.js';
@@ -310,7 +310,7 @@ export class EconomyService {
 export const catalogView = () => ({
   products: PRODUCTS.map((p) => ({ product_id: p, base_price_cents: BASE_PRICES_CENTS[p] })),
   enterprise_kinds: (Object.keys(ENTERPRISE_KINDS) as EnterpriseKind[]).map((k) => ({
-    kind: k, cost_cents: ENTERPRISE_KINDS[k], wage_cents_per_day: WAGES_CENTS[k], recipe: RECIPES[k] ?? null,
+    kind: k, cost_cents: ENTERPRISE_KINDS[k], zones: ENTERPRISE_ZONES[k], wage_cents_per_day: WAGES_CENTS[k], recipe: RECIPES[k] ?? null,
     retail_capacity_units: k === 'shop' ? SHOP_CAPACITY_UNITS : null,
   })),
   params: { sales_tax_bps: SALES_TAX_BPS, npc_spread_bps: NPC_SPREAD_BPS, loan_rate_bps_per_day: LOAN_RATE_BPS_PER_DAY, max_loan_cents: MAX_LOAN_CENTS },

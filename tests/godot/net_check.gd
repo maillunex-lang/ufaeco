@@ -80,6 +80,27 @@ func _run() -> void:
 	await wait_until(func(): return results.has(buy), 3.0)
 	check(results.get(buy, {}).get("ok", false) == true, "участок куплен")
 
+	var ind := {}
+	for l in city.get("lots", []):
+		if l["zone"] == "industrial" and l["owner_company_id"] == null:
+			ind = l
+			break
+	var buy2: String = client.send_command("map.buy_lot", {"company_id": cid, "lot_id": ind["id"]})
+	await wait_until(func(): return results.has(buy2), 3.0)
+	var early: String = client.send_command("enterprise.create", {"company_id": cid, "kind": "shop", "name": "Не там", "lot_id": ind["id"]})
+	await wait_until(func(): return results.has(early), 3.0)
+	check(results.get(early, {}).get("error", {}).get("code", "") == "zoning_violation", "зонирование: магазин в промзоне отклонён")
+	var built: String = client.send_command("enterprise.create", {"company_id": cid, "kind": "farm", "name": "Ферма Godot", "lot_id": ind["id"]})
+	await wait_until(func(): return results.has(built), 3.0)
+	check(results.get(built, {}).get("ok", false) == true, "ферма построена на участке")
+	var mapq2: String = client.send_command("map.get_city", {"city_id": "ufa"})
+	await wait_until(func(): return results.has(mapq2), 3.0)
+	var shown := false
+	for l in results[mapq2]["result"]["city"]["lots"]:
+		if l["id"] == ind["id"] and l["building"] != null and l["building"]["kind"] == "farm":
+			shown = true
+	check(shown, "здание видно в map.get_city")
+
 	print("3. reconnect")
 	var old_session: String = client.session_id
 	var old_player: String = client.player_id

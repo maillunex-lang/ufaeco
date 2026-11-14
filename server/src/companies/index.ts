@@ -10,8 +10,9 @@ export interface CompanyView {
   status: string;
 }
 
-const unique = (e: unknown, code: string) => {
-  if ((e as { code?: string }).code === '23505') throw new DomainError(code);
+const unique = (e: unknown, code: string, byConstraint: Record<string, string> = {}) => {
+  const err = e as { code?: string; constraint?: string };
+  if (err.code === '23505') throw new DomainError(byConstraint[err.constraint ?? ''] ?? code);
   throw e;
 };
 
@@ -128,20 +129,20 @@ export class CompanyService {
 
   // ---- предприятия
 
-  async createEnterprise(tx: Queryable, playerId: string, companyId: string, kind: EnterpriseKind, name: string) {
+  async createEnterprise(tx: Queryable, playerId: string, companyId: string, kind: EnterpriseKind, name: string, lotId: string | null = null) {
     this.assertActive(await this.getOwned(tx, playerId, companyId, true)); // FOR UPDATE: сериализует списания компании
     let id: string;
     try {
-      id = (await tx.query<{ id: string }>('INSERT INTO enterprises (company_id, kind, name) VALUES ($1,$2,$3) RETURNING id', [companyId, kind, name])).rows[0]!.id;
+      id = (await tx.query<{ id: string }>('INSERT INTO enterprises (company_id, kind, name, lot_id) VALUES ($1,$2,$3,$4) RETURNING id', [companyId, kind, name, lotId])).rows[0]!.id;
     } catch (e) {
-      return unique(e, 'enterprise_name_taken');
+      return unique(e, 'enterprise_name_taken', { enterprises_lot_key: 'lot_occupied' });
     }
-    const balance = await this.debit(tx, companyId, ENTERPRISE_KINDS[kind], 'enterprise_created', playerId, { enterprise_id: id, kind, name });
-    return { id, company_id: companyId, kind, name, cost_cents: ENTERPRISE_KINDS[kind], balance_cents: balance };
+    const balance = await this.debit(tx, companyId, ENTERPRISE_KINDS[kind], 'enterprise_created', playerId, { enterprise_id: id, kind, name, lot_id: lotId });
+    return { id, company_id: companyId, kind, name, lot_id: lotId, cost_cents: ENTERPRISE_KINDS[kind], balance_cents: balance };
   }
 
   async enterprises(tx: Queryable, companyId: string) {
-    const r = await tx.query<{ id: string; kind: string; name: string }>('SELECT id, kind, name FROM enterprises WHERE company_id = $1 ORDER BY seq', [companyId]);
+    const r = await tx.query<{ id: string; kind: string; name: string; lot_id: string | null }>('SELECT id, kind, name, lot_id FROM enterprises WHERE company_id = $1 ORDER BY seq', [companyId]);
     return r.rows;
   }
 }
