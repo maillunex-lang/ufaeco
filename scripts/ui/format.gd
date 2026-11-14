@@ -1,6 +1,17 @@
 class_name BashFormat
 extends RefCounted
 
+static func thousands(n: int) -> String:
+	var s := str(absi(n))
+	var out := ""
+	for i in range(s.length()):
+		out += s[i]
+		var left := s.length() - i - 1
+		if left > 0 and left % 3 == 0:
+			out += " "
+	return out
+
+
 ## 12345600 копеек → "123 456 ₽"
 static func money(cents: int) -> String:
 	var rub := absi(cents) / 100

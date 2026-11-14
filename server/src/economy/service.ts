@@ -9,6 +9,7 @@ import {
   SHOP_CAPACITY_UNITS, WAGES_CENTS,
 } from './catalog.js';
 import { nextPrice } from './pricing.js';
+import type { CityPort } from '../world_map/service.js';
 
 const DAY_LOCK = 727_003;
 
@@ -32,12 +33,13 @@ export interface DaySummary {
   interest_accrued_cents: number;
   bankruptcies: string[];
   prices: Record<string, number>;
+  city?: { population: number; developed: number; new_lots: number; new_road_tiles: number };
 }
 
 const add = (m: Record<string, number>, k: string, v: number) => (m[k] = (m[k] ?? 0) + v);
 
 export class EconomyService {
-  constructor(private readonly companies: CompanyService) {}
+  constructor(private readonly companies: CompanyService, private readonly city?: CityPort) {}
 
   /** Создаёт NPC-компании и начальные цены. Идемпотентно. */
   async bootstrap(db: Db): Promise<void> {
@@ -178,6 +180,8 @@ export class EconomyService {
       )).rows.map((r) => r.id);
 
       const shops: { companyId: string; stock: number }[] = [];
+      let operatingEnterprises = 0;
+      let industrialEnterprises = 0;
       const missed = new Set<string>();
 
       for (const companyId of cs) {
@@ -197,6 +201,8 @@ export class EconomyService {
             sum.idle_enterprises += 1;
           }
           if (!operating) continue;
+          operatingEnterprises += 1;
+          if (e.kind === 'farm' || e.kind === 'mill' || e.kind === 'elevator' || e.kind === 'bakery') industrialEnterprises += 1;
           const recipe = RECIPES[e.kind];
           if (recipe) {
             const ok = Object.entries(recipe.inputs).every(([p, q]) => (inv[p] ?? 0) >= (q ?? 0));
@@ -218,14 +224,15 @@ export class EconomyService {
       }
 
       // Розница: жители покупают хлеб; доля магазина пропорциональна его предложению.
-      add(demand, 'bread', RESIDENT_BREAD_DEMAND);
+      const residentDemand = this.city ? await this.city.breadDemand(tx) : RESIDENT_BREAD_DEMAND;
+      add(demand, 'bread', residentDemand);
       const offers = new Map<string, number>(); // companyId -> единиц хлеба на продажу (все магазины компании)
       for (const s of shops) offers.set(s.companyId, (offers.get(s.companyId) ?? 0) + Math.min(s.stock, SHOP_CAPACITY_UNITS));
       const stockOf = new Map<string, number>(shops.map((s) => [s.companyId, s.stock]));
       const offered = [...offers.values()].reduce((a, b) => a + b, 0);
       add(supply, 'bread', offered);
       for (const [companyId, off] of offers) {
-        const sold = Math.min(Math.min(off, stockOf.get(companyId) ?? 0), offered <= RESIDENT_BREAD_DEMAND ? off : Math.floor((off * RESIDENT_BREAD_DEMAND) / offered));
+        const sold = Math.min(Math.min(off, stockOf.get(companyId) ?? 0), offered <= residentDemand ? off : Math.floor((off * residentDemand) / offered));
         if (sold <= 0) continue;
         const revenue = sold * price.bread!;
         const tax = Math.floor((revenue * SALES_TAX_BPS) / 10_000);
@@ -259,6 +266,12 @@ export class EconomyService {
           await this.declareBankrupt(tx, companyId, day, price, supply);
           sum.bankruptcies.push(companyId);
         }
+      }
+
+      // Город живёт: население, застройка, новые улицы — от активности экономики.
+      if (this.city) {
+        const c = await this.city.step(tx, day, { operatingEnterprises, industrialEnterprises, retailUnitsSold: sum.retail_units_sold });
+        sum.city = { population: c.stats.population, developed: c.developed.length, new_lots: c.new_lots.length, new_road_tiles: c.new_road_tiles };
       }
 
       // Новые цены; счётчики дня обнуляются.

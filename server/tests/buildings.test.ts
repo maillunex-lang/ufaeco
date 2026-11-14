@@ -22,7 +22,7 @@ beforeAll(async () => {
   await map.bootstrap(db);
   // Тестовая БД одноразовая: освобождаем участки (и здания на них), чтобы прогоны не исчерпали карту.
   await db.query('UPDATE enterprises SET lot_id = NULL WHERE lot_id IS NOT NULL');
-  await db.query('UPDATE map_lots SET owner_company_id = NULL, bought_at = NULL');
+  await db.query("UPDATE map_lots SET owner_company_id = NULL, bought_at = NULL, development = 0 WHERE zone <> 'park'");
 });
 afterAll(async () => { await db.end(); });
 
@@ -34,7 +34,7 @@ const newCo = () =>
     return { playerId: p.id, companyId: c.id };
   });
 const freeLot = async (zone: string) =>
-  ((await db.query("SELECT id FROM map_lots WHERE city_id='ufa' AND zone=$1 AND owner_company_id IS NULL ORDER BY random() LIMIT 1", [zone])).rows[0] as { id: string }).id;
+  ((await db.query("SELECT id FROM map_lots WHERE city_id='ufa' AND zone=$1 AND owner_company_id IS NULL AND development = 0 ORDER BY random() LIMIT 1", [zone])).rows[0] as { id: string }).id;
 const ownedLot = async (co: { playerId: string; companyId: string }, zone: string) => {
   const id = await freeLot(zone);
   await tx((t) => map.buyLot(t, co.playerId, co.companyId, id));
@@ -138,7 +138,7 @@ describe('постройка по WebSocket', () => {
       const cat = (await c.command('economy.get_catalog', {})).payload.result;
       expect(cat.enterprise_kinds.find((k: { kind: string }) => k.kind === 'shop').zones).toEqual(['commercial', 'residential']);
       const city = (await c.command('map.get_city', { city_id: 'ufa' })).payload.result.city;
-      const lot = city.lots.find((l: { zone: string; owner_company_id: string | null }) => l.zone === 'commercial' && !l.owner_company_id);
+      const lot = city.lots.find((l: { zone: string; for_sale: boolean }) => l.zone === 'commercial' && l.for_sale);
       const notYet = await c.command('enterprise.create', { company_id: co, kind: 'shop', name: 'Рано', lot_id: lot.id });
       expect(notYet.payload.error.code).toBe('lot_not_owned');
       expect((await c.command('map.buy_lot', { company_id: co, lot_id: lot.id })).payload.ok).toBe(true);

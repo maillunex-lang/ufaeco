@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cjng8jmge6kko"
-path="res://.godot/imported/road_cross.png-48334d2418f038b084e0adc7b05745d6.ctex"
+uid="uid://bwwmc3h17j6h"
+path="res://.godot/imported/lot_empty.png-740caabafbccb13823982d6562d1c295.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/iso/road_cross.png"
-dest_files=["res://.godot/imported/road_cross.png-48334d2418f038b084e0adc7b05745d6.ctex"]
+source_file="res://assets/art/iso/lot_empty.png"
+dest_files=["res://.godot/imported/lot_empty.png-740caabafbccb13823982d6562d1c295.ctex"]
 
 [params]
 
@@ -21,7 +21,7 @@ compress/lossy_quality=0.7
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

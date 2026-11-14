@@ -73,7 +73,7 @@ func _run() -> void:
 	check(not city.is_empty() and city["tiles"].size() == int(city["height"]), "карта города получена (%dx%d, участков: %d)" % [int(city.get("width", 0)), int(city.get("height", 0)), city.get("lots", []).size()])
 	var free_lot := {}
 	for l in city.get("lots", []):
-		if l["zone"] == "residential" and l["owner_company_id"] == null:
+		if l["zone"] == "residential" and l["for_sale"]:
 			free_lot = l
 			break
 	var buy: String = client.send_command("map.buy_lot", {"company_id": cid, "lot_id": free_lot["id"]})
@@ -82,7 +82,7 @@ func _run() -> void:
 
 	var ind := {}
 	for l in city.get("lots", []):
-		if l["zone"] == "industrial" and l["owner_company_id"] == null:
+		if l["zone"] == "industrial" and l["for_sale"]:
 			ind = l
 			break
 	var buy2: String = client.send_command("map.buy_lot", {"company_id": cid, "lot_id": ind["id"]})
