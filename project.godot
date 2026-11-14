@@ -6,6 +6,7 @@ config_version=5
 
 config/name="БАШЭКО Online: Республика бизнеса"
 run/main_scene="res://scenes/main.tscn"
+config/icon="res://assets/icons/app_icon.png"
 
 [display]
 

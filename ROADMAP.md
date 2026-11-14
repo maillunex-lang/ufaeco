@@ -217,6 +217,16 @@
 - [ ] APK debug build
 - [ ] Проверка на физическом Android
 
+## Арт и интерфейс
+
+Статус: **арт-направление зафиксировано, игровых ассетов пока нет** — см. [docs/ART_DIRECTION.md](docs/ART_DIRECTION.md)
+
+- [x] Референсы и палитра (`assets/art/reference`, `scripts/ui/palette.gd`)
+- [x] Тема интерфейса и HUD главной сцены в новом стиле
+- [ ] Игровые изометрические спрайты
+- [ ] Иконки ресурсов, UI-набор
+- [ ] Adaptive icon и splash для Android
+
 ## Этап 11. Persistent storage
 
 Статус: **частично (этапы 1–2)**

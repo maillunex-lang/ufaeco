@@ -10,35 +10,66 @@ position = Vector2(640, 360)
 
 [node name="Hud" type="CanvasLayer" parent="."]
 
-[node name="Title" type="Label" parent="Hud"]
-offset_left = 32.0
-offset_top = 24.0
+[node name="UI" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TopPanel" type="PanelContainer" parent="Hud/UI"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 20.0
 offset_right = 900.0
-offset_bottom = 64.0
+offset_bottom = 150.0
+
+[node name="Box" type="VBoxContainer" parent="Hud/UI/TopPanel"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Hud/UI/TopPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "БАШЭКО Online — единый рынок Башкортостана"
 
-[node name="Status" type="Label" parent="Hud"]
-offset_left = 34.0
-offset_top = 72.0
-offset_right = 900.0
-offset_bottom = 120.0
-theme_override_colors/font_color = Color(0.75, 0.85, 0.92, 1)
-theme_override_font_sizes/font_size = 16
-text = "Подключение к серверному миру: прототип"
+[node name="Status" type="Label" parent="Hud/UI/TopPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Подключение к серверному миру…"
 
-[node name="NetError" type="Label" parent="Hud"]
-offset_left = 34.0
-offset_top = 100.0
-offset_right = 1150.0
-offset_bottom = 130.0
-theme_override_colors/font_color = Color(0.95, 0.55, 0.45, 1)
-theme_override_font_sizes/font_size = 16
+[node name="NetError" type="Label" parent="Hud/UI/TopPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.816, 0.345, 0.29, 1)
 
-[node name="Hint" type="Label" parent="Hud"]
-offset_left = 34.0
-offset_top = 650.0
-offset_right = 1150.0
-offset_bottom = 690.0
-theme_override_colors/font_color = Color(0.65, 0.75, 0.82, 1)
-text = "Следующий этап: общий рынок, контракты и аренда помещений в жилых домах"
+[node name="Actions" type="HBoxContainer" parent="Hud/UI"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 636.0
+offset_right = 760.0
+offset_bottom = 696.0
+theme_override_constants/separation = 14
+
+[node name="RentButton" type="Button" parent="Hud/UI/Actions"]
+custom_minimum_size = Vector2(230, 56)
+layout_mode = 2
+disabled = true
+tooltip_text = "Появится на следующих этапах"
+text = "Аренда помещений"
+
+[node name="ContractsButton" type="Button" parent="Hud/UI/Actions"]
+custom_minimum_size = Vector2(230, 56)
+layout_mode = 2
+disabled = true
+tooltip_text = "Появится на следующих этапах"
+text = "Контракты игроков"
+
+[node name="MarketButton" type="Button" parent="Hud/UI/Actions"]
+custom_minimum_size = Vector2(230, 56)
+layout_mode = 2
+disabled = true
+tooltip_text = "Появится на следующих этапах"
+text = "Общий рынок"
