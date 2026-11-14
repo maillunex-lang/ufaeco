@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SPEC } from './constants.js';
-import { ENTERPRISE_KIND_IDS, PRODUCTS } from '../companies/catalog.js';
+import { ENTERPRISE_KIND_IDS } from '../companies/catalog.js';
 
 const uuid = z.uuid();
 
@@ -64,17 +64,7 @@ export const commandArgSchemas = {
   'company.list': z.strictObject({}),
   'company.get': z.strictObject({ company_id: uuid }),
   'company.journal': z.strictObject({ company_id: uuid, limit: z.number().int().min(1).max(100).optional() }),
-  'economy.get_catalog': z.strictObject({}),
-  'economy.get_prices': z.strictObject({}),
-  'economy.trade': z.strictObject({
-    company_id: uuid,
-    product_id: z.enum(PRODUCTS),
-    side: z.enum(['buy', 'sell']),
-    quantity: z.number().int().min(1).max(10_000),
-  }),
-  'bank.get_loan': z.strictObject({ company_id: uuid }),
-  'bank.take_loan': z.strictObject({ company_id: uuid, amount_cents: z.number().int().min(1).max(1e12) }),
-  'bank.repay_loan': z.strictObject({ company_id: uuid, amount_cents: z.number().int().min(1).max(1e12) }),
+  'catalog.get': z.strictObject({}),
   'map.get_city': z.strictObject({ city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/) }),
   'map.buy_lot': z.strictObject({ company_id: uuid, lot_id: z.string().regex(/^[a-z0-9_-]{1,64}$/) }),
   'enterprise.create': z.strictObject({
@@ -116,8 +106,21 @@ export const serverPayloadSchemas = {
     server_tick: z.number().int(),
     server_time: z.number(),
     players_online: z.number().int(),
-    economy_day: z.number().int(),
-    prices: z.record(z.string(), z.number().int()),
+    clock: z.strictObject({
+      tick: z.number().int(),
+      month_index: z.number().int(),
+      week: z.number().int(),
+      year: z.number().int(),
+      month: z.number().int(),
+      month_name: z.string(),
+      is_month_start: z.boolean(),
+      is_month_end: z.boolean(),
+      week_started_at: z.number(),
+      next_week_at: z.number(),
+      next_month_at: z.number(),
+      server_time: z.number(),
+      speed: z.number(),
+    }),
     players: z.array(z.strictObject({ player_id: uuid, display_name: z.string() })),
   }),
   command_result: z.strictObject({

@@ -29,3 +29,12 @@ export const ENTERPRISE_ZONES: Record<EnterpriseKind, readonly string[]> = {
   shop: ['commercial', 'residential'],
   construction_office: ['commercial'],
 };
+
+/** Каталог для клиента: что можно строить, сколько стоит и где. Параметры производства появятся с этапами 5–7. */
+export const catalogView = () => ({
+  enterprise_kinds: (Object.keys(ENTERPRISE_KINDS) as EnterpriseKind[]).map((k) => ({
+    kind: k,
+    cost_cents: ENTERPRISE_KINDS[k],
+    zones: ENTERPRISE_ZONES[k],
+  })),
+});

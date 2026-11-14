@@ -27,14 +27,9 @@
     "company.get",
     "company.journal",
     "enterprise.create",
-    "economy.get_catalog",
-    "economy.get_prices",
-    "economy.trade",
-    "bank.get_loan",
-    "bank.take_loan",
-    "bank.repay_loan",
     "map.get_city",
-    "map.buy_lot"
+    "map.buy_lot",
+    "catalog.get"
   ],
   "error_codes": [
     "invalid_message",
@@ -64,8 +59,6 @@
     "unknown_product",
     "insufficient_inventory",
     "company_bankrupt",
-    "loan_limit_exceeded",
-    "invalid_amount",
     "lot_taken",
     "lot_not_for_sale",
     "lot_not_owned",

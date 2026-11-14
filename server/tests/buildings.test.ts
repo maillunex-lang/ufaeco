@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AccountService } from '../src/accounts/index.js';
 import { CompanyService } from '../src/companies/index.js';
 import { ENTERPRISE_KINDS, ENTERPRISE_ZONES } from '../src/companies/catalog.js';
-import { EconomyService } from '../src/economy/service.js';
+import { ensureNpcCompanies } from '../src/companies/npc.js';
 import { createPool, withTransaction, type Db } from '../src/persistence/db.js';
 import { runMigrations } from '../src/persistence/migrate.js';
 import { MapService } from '../src/world_map/service.js';
@@ -12,13 +12,12 @@ import { startServer, TEST_DB_URL, TestClient } from './helpers.js';
 let db: Db;
 const companies = new CompanyService();
 const map = new MapService(companies);
-const economy = new EconomyService(companies);
 const accounts = new AccountService();
 
 beforeAll(async () => {
   db = createPool(TEST_DB_URL);
   await runMigrations(db);
-  await economy.bootstrap(db);
+  await ensureNpcCompanies(db);
   await map.bootstrap(db);
   // Тестовая БД одноразовая: освобождаем участки (и здания на них), чтобы прогоны не исчерпали карту.
   await db.query('UPDATE enterprises SET lot_id = NULL WHERE lot_id IS NOT NULL');
@@ -110,18 +109,9 @@ describe('постройка на участке', () => {
     expect([ENTERPRISE_KINDS.mill, ENTERPRISE_KINDS.farm]).toContain(spent);
   });
 
-  it('здание на участке работает в экономике: ферма на промзоне производит зерно', async () => {
-    const co = await newCo();
-    const lot = await ownedLot(co, 'industrial');
-    await tx((t) => map.construct(t, co.playerId, co.companyId, lot, 'farm', 'Ферма-кормилица'));
-    await tx((t) => companies.addInventory(t, co.companyId, 'fuel', 10));
-    const s = await economy.runDay(db, { companyIds: [co.companyId] });
-    expect(s.produced.grain).toBe(3);
-    expect(await tx((t) => companies.inventory(t, co.companyId))).toMatchObject({ grain: 3 });
-  });
-
   it('участок со зданием нельзя удалить: связь защищена', async () => {
     const co = await newCo();
+    await tx((t) => companies.credit(t, co.companyId, 100_000_000, 'test_grant', null, {}));
     const lot = await ownedLot(co, 'commercial');
     await tx((t) => map.construct(t, co.playerId, co.companyId, lot, 'shop', 'Магазин'));
     await expect(db.query('DELETE FROM map_lots WHERE id = $1', [lot])).rejects.toThrow();
@@ -135,7 +125,7 @@ describe('постройка по WebSocket', () => {
       const c = await TestClient.connect(ctx.url);
       expect((await c.register('b' + randomUUID().replace(/-/g, '').slice(0, 12))).type).toBe('auth_ok');
       const co = (await c.command('company.create', { name: 'WS Стройка ' + randomUUID().slice(0, 6) })).payload.result.company.id;
-      const cat = (await c.command('economy.get_catalog', {})).payload.result;
+      const cat = (await c.command('catalog.get', {})).payload.result;
       expect(cat.enterprise_kinds.find((k: { kind: string }) => k.kind === 'shop').zones).toEqual(['commercial', 'residential']);
       const city = (await c.command('map.get_city', { city_id: 'ufa' })).payload.result.city;
       const lot = city.lots.find((l: { zone: string; for_sale: boolean }) => l.zone === 'commercial' && l.for_sale);

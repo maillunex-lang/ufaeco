@@ -60,7 +60,7 @@
 | `hello` | `{ server_name, protocol_version, heartbeat_interval_ms, auth_timeout_ms, max_message_size }` |
 | `auth_ok` | `{ player_id, session_id, resume_token, display_name, server_tick, heartbeat_interval_ms, reconnect_timeout_s, resumed }` |
 | `heartbeat` | `{ client_time, server_time, server_tick }` |
-| `world_snapshot` | `{ world_id, server_tick, server_time, players_online, players: [{player_id, display_name}] }` |
+| `world_snapshot` | `{ world_id, server_tick, server_time, players_online, clock, players: [{player_id, display_name}] }`; `clock` — игровые часы: `tick, month_index, week (1..4), year, month, month_name, is_month_start, is_month_end, week_started_at, next_week_at, next_month_at, server_time, speed` (моменты — мс Unix сервера) |
 | `command_result` | `{ name, ok, duplicate, result?, error? }` |
 | `error` | `{ code, message }` (message — по-русски, для логов; клиент показывает свой текст по `code`) |
 | `disconnect` | `{ reason }` |
@@ -80,16 +80,11 @@
 | `company.get` | `{ company_id }` | `company, inventory, enterprises` (только владелец) |
 | `company.journal` | `{ company_id, limit?: 1..100 }` | `entries` (новые первыми) |
 | `enterprise.create` | `{ company_id, kind, name, lot_id? }` | `enterprise`; с `lot_id` — постройка на своём участке (зонирование, один объект на участок), без — устаревший режим без привязки к карте |
-| `economy.get_catalog` | `{}` | товары, виды предприятий (стоимость, зарплата, рецепт), параметры |
-| `economy.get_prices` | `{}` | `economy_day`, `prices` (цена, базовая, последние спрос/предложение) |
-| `economy.trade` | `{ company_id, product_id, side: buy\|sell, quantity: 1..10000 }` | сделка с NPC-торговым домом по цене ± спред; цену клиент не задаёт |
+| `catalog.get` | `{}` | `enterprise_kinds`: вид, стоимость, допустимые зоны |
 | `map.get_city` | `{ city_id }` | `city`: `width, height, center, tiles[], population, housing_cap, jobs, growth_day, lots[]` — участок: `id, x, y, w, h, zone, development (0..3), for_sale, price_cents, владелец, building` |
 | `map.buy_lot` | `{ company_id, lot_id }` | `purchase` (цена задана сервером; парки и занятые участки не продаются) |
-| `bank.get_loan` | `{ company_id }` | `loan_cents` |
-| `bank.take_loan` | `{ company_id, amount_cents }` | `loan` |
-| `bank.repay_loan` | `{ company_id, amount_cents }` | `loan` |
 
-Операции над банкротом отклоняются кодом `company_bankrupt`. `world_snapshot` содержит `economy_day` и `prices` (копейки).
+Операции над банкротом отклоняются кодом `company_bankrupt`.
 
 Виды предприятий и стоимости — гипотезы: `server/src/companies/catalog.ts`.
 Команд «выдать деньги/товар» не существует; любое поле вроде `balance_cents` в `args` → `invalid_payload`.

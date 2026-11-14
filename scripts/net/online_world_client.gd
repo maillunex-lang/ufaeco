@@ -6,6 +6,8 @@ extends Node
 signal connection_state_changed(state: String)
 signal world_snapshot_received(snapshot: Dictionary)
 signal server_tick_changed(tick: int)
+## Началась новая игровая неделя (изменился номер игрового тика).
+signal game_tick_changed(game_tick: int)
 signal command_result_received(request_id: String, payload: Dictionary)
 signal network_error(message_ru: String)
 
@@ -71,9 +73,9 @@ var server_url: String = "http://127.0.0.1:8080"
 var websocket_url: String = "ws://127.0.0.1:8080/ws"
 var connected: bool = false
 var last_server_tick: int = 0
-var economy_day: int = 0
-## Текущие цены по товарам, копейки: {"bread": 9500, ...}
-var prices: Dictionary = {}
+## Игровые часы мира из snapshot: tick, year, month, month_name, week (1..4), next_week_at, next_month_at, server_time (мс Unix).
+var clock: Dictionary = {}
+var _clock_offset_ms: float = 0.0 # server_time − локальное время на момент получения snapshot
 var player_id: String = ""
 var session_id: String = ""
 var state: String = "disconnected"
@@ -159,13 +161,36 @@ func submit_intent(intent: Dictionary) -> bool:
 func apply_snapshot(snapshot: Dictionary) -> void:
 	if not snapshot.has("server_tick"):
 		return
-	economy_day = int(snapshot.get("economy_day", economy_day))
-	prices = snapshot.get("prices", prices)
+	var new_clock: Dictionary = snapshot.get("clock", {})
+	if not new_clock.is_empty():
+		_clock_offset_ms = float(new_clock["server_time"]) - Time.get_unix_time_from_system() * 1000.0
+		var changed := clock.is_empty() or int(new_clock["tick"]) != int(clock["tick"])
+		clock = new_clock
+		if changed:
+			game_tick_changed.emit(int(clock["tick"]))
 	var tick := int(snapshot["server_tick"])
 	if tick != last_server_tick:
 		last_server_tick = tick
 		server_tick_changed.emit(tick)
 	world_snapshot_received.emit(snapshot)
+
+
+## «Март 2026 • неделя 2 • до новой недели 3 ч 12 мин»; пусто, пока часы не получены.
+func clock_text_ru() -> String:
+	if clock.is_empty():
+		return ""
+	var now_server := Time.get_unix_time_from_system() * 1000.0 + _clock_offset_ms
+	var left_ms := maxf(float(clock["next_week_at"]) - now_server, 0.0)
+	return "%s %d • неделя %d • новая неделя через %s" % [str(clock["month_name"]), int(clock["year"]), int(clock["week"]), _duration_ru(left_ms)]
+
+
+static func _duration_ru(ms: float) -> String:
+	var total := int(ms / 1000.0)
+	if total >= 3600:
+		return "%d ч %02d мин" % [total / 3600, (total % 3600) / 60]
+	if total >= 60:
+		return "%d мин %02d с" % [total / 60, total % 60]
+	return "%d с" % total
 
 
 func status_text_ru() -> String:

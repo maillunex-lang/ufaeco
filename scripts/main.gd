@@ -9,9 +9,8 @@ var company_name: String = ""
 var balance_cents: int = 0
 var _pending: Dictionary = {} # request_id -> Callable(payload)
 var _bootstrapped := false
-var _seen_day := -1
 var population: int = 0
-var catalog: Dictionary = {} # kind -> {cost_cents, wage_cents_per_day, recipe, zones}
+var catalog: Dictionary = {} # kind -> {cost_cents, zones}
 var _build_kinds: Array[String] = []
 
 @onready var status_label: Label = %Status
@@ -42,6 +41,7 @@ func _ready() -> void:
 	network.network_error.connect(func(m): error_label.text = m)
 	network.command_result_received.connect(_on_command_result)
 	network.world_snapshot_received.connect(_on_snapshot)
+	network.game_tick_changed.connect(_on_game_tick)
 	network.connect_to_world()
 
 
@@ -67,7 +67,7 @@ func _on_connection_state_changed(state: String) -> void:
 	_refresh_status()
 	if state == "online" and not _bootstrapped:
 		_bootstrapped = true
-		_call("economy.get_catalog", {}, func(r):
+		_call("catalog.get", {}, func(r):
 			for k in r["enterprise_kinds"]:
 				catalog[str(k["kind"])] = k
 			_call("company.list", {}, _on_company_list))
@@ -90,12 +90,14 @@ func _use_company(c: Dictionary) -> void:
 	_load_city(true)
 
 
-## Город растёт по экономическим дням: при смене дня подтягиваем свежую карту.
-func _on_snapshot(snapshot: Dictionary) -> void:
-	var day := int(snapshot.get("economy_day", 0))
-	if _seen_day >= 0 and day != _seen_day and company_id != "":
+## Город растёт по игровым неделям: при смене недели подтягиваем свежую карту.
+func _on_snapshot(_snapshot: Dictionary) -> void:
+	_refresh_status()
+
+
+func _on_game_tick(_tick: int) -> void:
+	if company_id != "":
 		_load_city(false)
-	_seen_day = day
 
 
 func _load_city(fit: bool) -> void:
@@ -145,10 +147,8 @@ func _building_text(lot: Dictionary, building: Dictionary) -> String:
 	var text := "%s «%s»" % [BashFormat.kind(k), str(building["name"])]
 	var info: Dictionary = catalog.get(k, {})
 	if not info.is_empty():
-		text += "\nЗарплаты: %s в день" % BashFormat.money(int(info["wage_cents_per_day"]))
-		var r := BashFormat.recipe(info.get("recipe"))
-		if r != "":
-			text += "\nПроизводство: " + r
+		text += "\nСтоимость постройки: %s" % BashFormat.money(int(info["cost_cents"]))
+	text += "\nПроизводство появится на следующих этапах."
 	var owner = lot.get("owner_company_id")
 	text += "\nВладелец: %s%s" % [str(lot.get("owner_name", "—")), " (вы)" if owner != null and str(owner) == company_id else ""]
 	return text
@@ -211,4 +211,5 @@ func _on_buy_pressed() -> void:
 func _refresh_status() -> void:
 	var money := "" if company_id == "" else " • %s: %s" % [company_name, BashFormat.money(balance_cents)]
 	var pop := "" if population == 0 else " • население: %s" % BashFormat.thousands(population)
-	status_label.text = "Сервер: %s • день %d%s%s" % [network.status_text_ru(), network.economy_day, pop, money]
+	var clock_text := network.clock_text_ru()
+	status_label.text = "Сервер: %s%s%s%s%s" % [network.status_text_ru(), "" if clock_text == "" else " • " + clock_text, pop, money, ""]

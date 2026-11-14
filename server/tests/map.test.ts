@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AccountService } from '../src/accounts/index.js';
 import { CompanyService } from '../src/companies/index.js';
-import { NPC } from '../src/economy/catalog.js';
-import { EconomyService } from '../src/economy/service.js';
+import { ensureNpcCompanies, NPC } from '../src/companies/npc.js';
 import { createPool, withTransaction, type Db } from '../src/persistence/db.js';
 import { runMigrations } from '../src/persistence/migrate.js';
 import { MapService } from '../src/world_map/service.js';
@@ -26,7 +25,7 @@ describe('сервис карты и покупка участков', () => {
   beforeAll(async () => {
     db = createPool(TEST_DB_URL);
     await runMigrations(db);
-    await new EconomyService(companies).bootstrap(db);
+    await ensureNpcCompanies(db);
     await map.bootstrap(db);
   });
   afterAll(async () => { await db.end(); });
@@ -107,16 +106,15 @@ describe('сервис карты и покупка участков', () => {
   });
 });
 
-describe('рост города в БД (экономический день)', () => {
+describe('рост города в БД (недельный шаг)', () => {
   let db: Db;
   const companies = new CompanyService();
   const map = new MapService(companies);
-  const economy = new EconomyService(companies, map);
   const accounts = new AccountService();
   beforeAll(async () => {
     db = createPool(TEST_DB_URL);
     await runMigrations(db);
-    await economy.bootstrap(db);
+    await ensureNpcCompanies(db);
     await map.bootstrap(db);
   });
   afterAll(async () => { await db.end(); });
@@ -125,10 +123,9 @@ describe('рост города в БД (экономический день)', 
   it('день города сохраняется: население, рост участков и улиц, уникальные id, прогресс дня', async () => {
     const before = await tx((t) => map.getCity(t, 'ufa'));
     let grown = false;
-    for (let i = 0; i < 40 && !grown; i++) {
-      const s = await economy.runDay(db, { companyIds: [] });
-      expect(s.city).toBeTruthy();
-      grown = (s.city?.new_lots ?? 0) > 0;
+    for (let i = 0; i < 60 && !grown; i++) {
+      const s = await tx((t) => map.step(t, before.growth_day + 1 + i, { operatingEnterprises: 0, industrialEnterprises: 0, retailUnitsSold: 0 }));
+      grown = s.new_lots.length > 0;
     }
     const after = await tx((t) => map.getCity(t, 'ufa'));
     expect(after.growth_day).toBeGreaterThan(before.growth_day);
@@ -158,7 +155,7 @@ describe('рост города в БД (экономический день)', 
       mine.push(lot.id);
     }
     await db.query('UPDATE cities SET population = 6000 WHERE id = $1', ['ufa']);
-    for (let i = 0; i < 25; i++) await economy.runDay(db, { companyIds: [] });
+    for (let i = 0; i < 25; i++) await tx((t) => map.step(t, Date.now() % 1_000_000 + i, { operatingEnterprises: 0, industrialEnterprises: 0, retailUnitsSold: 0 }));
     const rows = (await db.query('SELECT id, development FROM map_lots WHERE id = ANY($1)', [mine])).rows;
     expect(rows.every((r) => r.development === 0)).toBe(true);
     const vac = (await db.query("SELECT price_cents, base_price_cents FROM map_lots WHERE city_id='ufa' AND owner_company_id IS NULL AND development = 0 AND zone <> 'park' LIMIT 20")).rows;
@@ -166,26 +163,6 @@ describe('рост города в БД (экономический день)', 
     const pop = Number((await db.query("SELECT population p FROM cities WHERE id='ufa'")).rows[0].p);
     const factor = Math.max(0.7, Math.min(3, 0.7 + 0.8 * (pop / 2000)));
     for (const v of vac) expect(Number(v.price_cents)).toBe(Math.max(1, Math.round(Number(v.base_price_cents) * factor)));
-  });
-
-  it('спрос жителей на хлеб зависит от населения', async () => {
-    const mk = async () => tx(async (t) => {
-      const p = await accounts.createGuestPlayer(t);
-      const c = await companies.create(t, p.id, 'Хлеб ' + randomUUID().slice(0, 10));
-      await companies.createEnterprise(t, p.id, c.id, 'shop', 'Лавка');
-      await companies.addInventory(t, c.id, 'bread', 1000);
-      return c.id;
-    });
-    const soldFor = async (pop: number) => {
-      const id = await mk();
-      await db.query('UPDATE cities SET population = $1 WHERE id = $2', [pop, 'ufa']);
-      const s = await economy.runDay(db, { companyIds: [id] });
-      return s.retail_units_sold;
-    };
-    const small = await soldFor(300); // спрос 90 → max(100, …) = 100
-    const large = await soldFor(3000); // спрос 900, ёмкость магазина 300
-    expect(small).toBe(100);
-    expect(large).toBe(300);
   });
 });
 
