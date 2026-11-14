@@ -1,21 +1,15 @@
 import type { CompanyService } from '../companies/index.js';
 import { ENTERPRISE_ZONES, type EnterpriseKind } from '../companies/catalog.js';
 import { DomainError } from '../errors.js';
-import { NPC } from '../economy/catalog.js';
+import { NPC } from '../companies/npc.js';
 import { writeAudit } from '../persistence/audit.js';
 import { withTransaction, type Db, type Queryable } from '../persistence/db.js';
 import { generateInitialCity, stateTiles, tilesToGrid, type CityState, type Lot, type Zone } from './generator.js';
-import { breadDemand, housingCap, initialPopulation, stepCity, type CityStats, type CityStep, type GrowthSignals } from './growth.js';
+import { housingCap, initialPopulation, stepCity, type CityStats, type CityStep, type GrowthSignals } from './growth.js';
 
 /** Стартовые города (этап 6 добавит остальные зоны Башкортостана). */
 export const CITIES = [{ id: 'ufa', name: 'Уфа', seed: 20241114 }] as const;
 export const MAIN_CITY = CITIES[0].id;
-
-/** Что экономике нужно от города (реализует MapService). */
-export interface CityPort {
-  breadDemand(q: Queryable): Promise<number>;
-  step(tx: Queryable, day: number, signals: GrowthSignals): Promise<CityStep>;
-}
 
 const lotRow = (r: Record<string, unknown>): Lot => ({
   id: r.id as string, x: r.x as number, y: r.y as number, w: r.w as number, h: r.h as number,
@@ -23,7 +17,7 @@ const lotRow = (r: Record<string, unknown>): Lot => ({
   development: r.development as number, owned: r.owner_company_id != null,
 });
 
-export class MapService implements CityPort {
+export class MapService {
   constructor(private readonly companies: CompanyService) {}
 
   /** Генерирует и сохраняет города. Идемпотентно: существующий город не перезаписывается. */
@@ -93,12 +87,7 @@ export class MapService implements CityPort {
 
   // ------------------------------------------------------------------ рост города
 
-  async breadDemand(q: Queryable): Promise<number> {
-    const r = await q.query<{ population: number }>('SELECT population FROM cities WHERE id = $1', [MAIN_CITY]);
-    return breadDemand(r.rows[0]?.population ?? 2000);
-  }
-
-  /** Экономический день города: население, застройка, новые улицы и участки, цены на землю. */
+  /** Недельный шаг города (прототип до этапа 13): население, застройка, новые улицы и участки, цены на землю. */
   async step(tx: Queryable, day: number, signals: GrowthSignals): Promise<CityStep> {
     const loaded = await this.loadState(tx, MAIN_CITY, true);
     if (!loaded) throw new DomainError('not_found');

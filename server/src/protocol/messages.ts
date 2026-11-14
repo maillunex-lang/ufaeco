@@ -48,8 +48,6 @@ export const ERROR_MESSAGES_RU: Record<string, string> = {
   unknown_product: 'Неизвестный товар',
   insufficient_inventory: 'Недостаточно товара на складе',
   company_bankrupt: 'Компания обанкротилась',
-  loan_limit_exceeded: 'Превышен лимит кредита',
-  invalid_amount: 'Неверная сумма',
   lot_taken: 'Участок уже занят',
   lot_not_for_sale: 'Участок не продаётся',
   lot_not_owned: 'Участок вам не принадлежит',

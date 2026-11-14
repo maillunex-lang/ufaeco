@@ -46,8 +46,10 @@ func _run() -> void:
 	check(await wait_until(func(): return ticks.size() >= 2 and client.last_server_tick > 0, 3.0), "server_tick растёт (%d)" % client.last_server_tick)
 	check(client.status_text_ru() == "в сети", "статус по-русски: " + client.status_text_ru())
 
-	check(client.prices.has("bread") and int(client.prices["bread"]) > 0, "цены из snapshot: %s" % str(client.prices))
-	check(client.economy_day >= 0, "экономический день в snapshot: %d" % client.economy_day)
+	check(not client.clock.is_empty(), "игровые часы в snapshot")
+	check(int(client.clock.get("week", 0)) >= 1 and int(client.clock.get("week", 0)) <= 4, "неделя игры 1..4: %s" % str(client.clock.get("week")))
+	check(float(client.clock.get("next_week_at", 0)) > float(client.clock.get("server_time", 1)), "следующая неделя в будущем")
+	check(client.clock_text_ru().find("неделя") != -1, "текст часов по-русски: " + client.clock_text_ru())
 
 	print("2. команды")
 	var rid: String = client.send_command("company.create", {"name": "Тест-" + login})
@@ -59,12 +61,12 @@ func _run() -> void:
 	check(results.get(bad, {}).get("ok", true) == false, "клиентский баланс отклонён сервером")
 
 	var cid: String = results[rid]["result"]["company"]["id"]
-	var trade: String = client.send_command("economy.trade", {"company_id": cid, "product_id": "fuel", "side": "buy", "quantity": 5})
-	await wait_until(func(): return results.has(trade), 3.0)
-	check(results.get(trade, {}).get("ok", false) == true, "покупка у NPC-торгового дома")
-	var forged: String = client.send_command("economy.trade", {"company_id": cid, "product_id": "fuel", "side": "buy", "quantity": 1, "price_cents": 1})
-	await wait_until(func(): return results.has(forged), 3.0)
-	check(results.get(forged, {}).get("ok", true) == false, "клиент не может задать цену")
+	var cat: String = client.send_command("catalog.get", {})
+	await wait_until(func(): return results.has(cat), 3.0)
+	check(results.get(cat, {}).get("ok", false) == true, "каталог зданий получен")
+	var removed: String = client.send_command("economy.trade", {"company_id": cid, "product_id": "fuel", "side": "buy", "quantity": 1})
+	await wait_until(func(): return results.has(removed), 3.0)
+	check(results.get(removed, {}).get("error", {}).get("code", "") == "unknown_command", "старая торговля с NPC удалена")
 
 	print("2b. карта")
 	var mapq: String = client.send_command("map.get_city", {"city_id": "ufa"})

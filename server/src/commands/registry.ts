@@ -3,15 +3,13 @@ import type { CompanyService } from '../companies/index.js';
 import { ENTERPRISE_KINDS } from '../companies/catalog.js';
 import type { Queryable } from '../persistence/db.js';
 import type { CommandName } from '../protocol/schemas.js';
-import type { EconomyService } from '../economy/service.js';
-import { catalogView } from '../economy/service.js';
+import { catalogView } from '../companies/catalog.js';
 import type { MapService } from '../world_map/service.js';
 import type { World } from '../world/index.js';
 
 export interface Services {
   accounts: AccountService;
   companies: CompanyService;
-  economy: EconomyService;
   map: MapService;
   world: World;
 }
@@ -70,29 +68,7 @@ export const commandHandlers: Record<CommandName, Handler> = {
     return { enterprise: await services.companies.createEnterprise(tx, playerId, args.company_id, args.kind, args.name), cost_cents };
   },
 
-  'economy.get_catalog': async () => ({ ...catalogView() }),
-
-  'economy.get_prices': async ({ tx, services }) => ({
-    economy_day: await services.economy.currentDay(tx),
-    prices: await services.economy.getPrices(tx),
-  }),
-
-  'economy.trade': async ({ tx, playerId, services }, args) => ({
-    trade: await services.economy.trade(tx, playerId, args.company_id, args.product_id, args.side, args.quantity),
-  }),
-
-  'bank.get_loan': async ({ tx, playerId, services }, args) => {
-    const c = await services.companies.getOwned(tx, playerId, args.company_id);
-    return { company_id: c.id, loan_cents: await services.economy.getLoan(tx, c.id) };
-  },
-
-  'bank.take_loan': async ({ tx, playerId, services }, args) => ({
-    loan: await services.economy.takeLoan(tx, playerId, args.company_id, args.amount_cents),
-  }),
-
-  'bank.repay_loan': async ({ tx, playerId, services }, args) => ({
-    loan: await services.economy.repayLoan(tx, playerId, args.company_id, args.amount_cents),
-  }),
+  'catalog.get': async () => ({ ...catalogView() }),
 
   'map.get_city': async ({ tx, services }, args) => ({ city: await services.map.getCity(tx, args.city_id) }),
 
