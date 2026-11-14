@@ -1,0 +1,30 @@
+{
+  "protocol_version": 1,
+  "websocket_path": "/ws",
+  "client_to_server": ["auth", "reconnect", "heartbeat", "command", "disconnect"],
+  "server_to_client": ["hello", "auth_ok", "heartbeat", "world_snapshot", "command_result", "error", "disconnect"],
+  "commands": ["session.get_profile", "session.set_display_name"],
+  "error_codes": [
+    "invalid_message",
+    "unsupported_protocol_version",
+    "unknown_message_type",
+    "unknown_command",
+    "invalid_payload",
+    "not_authenticated",
+    "already_authenticated",
+    "auth_timeout",
+    "invalid_session",
+    "session_expired",
+    "request_id_required",
+    "request_id_conflict",
+    "rate_limited",
+    "message_too_large",
+    "internal_error"
+  ],
+  "disconnect_reasons": ["client_closing", "replaced_by_new_connection", "heartbeat_timeout", "rate_limited", "protocol_error", "server_shutdown"],
+  "limits": {
+    "display_name_min": 2,
+    "display_name_max": 32,
+    "auth_timeout_ms": 10000
+  }
+}

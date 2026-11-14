@@ -20,6 +20,35 @@ Game Services
 PostgreSQL / Durable Ledger
 ```
 
+## Выбранный стек
+
+| Часть | Технологии |
+|---|---|
+| Клиент | Godot 4, `gl_compatibility`, Android |
+| Backend | TypeScript, Node.js ≥ 20, Fastify, WebSocket (`ws`) |
+| Валидация протокола | Zod (строгие схемы, лишние поля запрещены) |
+| База данных | PostgreSQL 16 через `pg`, SQL-миграции (`server/migrations`) |
+| Тесты | Vitest + реальный PostgreSQL |
+
+Не используются: NestJS, Redis, Kubernetes, микросервисы. Один процесс, модульный монолит.
+
+## Модули сервера (`server/src`)
+
+- `accounts`, `sessions`, `world` — реализованы (этап 1);
+- `companies`, `market`, `contracts`, `real_estate` — только интерфейсы, функциональности нет;
+- `persistence` (pool, транзакции, миграции, audit, идемпотентность), `protocol` (Zod-схемы), `security` (rate limiter, токены), `net` (WebSocket-шлюз).
+
+## Протокол
+
+Единый формат описан в [protocol/README.md](../protocol/README.md), константы — `protocol/protocol.json`
+(их читают сервер и Godot-клиент). Конверт: `protocol_version`, `message_id`, `type`, `request_id`, `payload`.
+Типы: `hello`, `auth`, `auth_ok`, `heartbeat`, `world_snapshot`, `command`, `command_result`, `error`, `disconnect`, `reconnect`.
+
+- Сессии: `auth` создаёт гостевого игрока и сессию; `resume_token` хранится в БД только как sha256 и ротируется при каждом `reconnect`.
+- Идемпотентность: `command` требует `request_id`; пара `(player_id, request_id)` выполняется ровно один раз (резерв, выполнение и ответ — в одной транзакции).
+- Тик мира (`TICK_RATE`) и рассылка snapshots (`SNAPSHOT_RATE`) общие для всех клиентов.
+- Защита: rate limit на соединение, лимит размера сообщения, таймаут авторизации, heartbeat-таймаут.
+
 ## Принцип авторитетности
 
 Клиент отправляет только намерение:
@@ -72,4 +101,4 @@ PostgreSQL / Durable Ledger
 
 Актуальная дорожная карта находится в [ROADMAP.md](../ROADMAP.md).
 
-Текущая реализация онлайн-каркаса находится в draft PR #1 и должна попасть в `main` после успешной проверки.
+Каркас клиента (PR #1) и серверный онлайн-мир этапа 1 находятся в `main`.

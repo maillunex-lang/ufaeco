@@ -1,0 +1,32 @@
+{
+  "name": "basheco-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Авторитетный сервер общего онлайн-мира БАШЭКО Online",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "start": "node --env-file-if-exists=.env --import tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "node --env-file-if-exists=.env --import tsx src/persistence/migrate-cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fastify": "^5.12.8",
+    "pg": "^8.23.1",
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

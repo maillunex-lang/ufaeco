@@ -14,6 +14,8 @@ func _ready() -> void:
     network = OnlineWorldClient.new()
     add_child(network)
     network.connection_state_changed.connect(_on_connection_state_changed)
+    network.server_tick_changed.connect(_on_server_tick_changed)
+    network.network_error.connect(_on_network_error)
     network.connect_to_world()
     queue_redraw()
 
@@ -30,7 +32,18 @@ func _draw() -> void:
     draw_rect(Rect2(620, 500, 220, 52), Color("#203640"))
     draw_string(ThemeDB.fallback_font, Vector2(640, 533), "Общий рынок", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#f3bf67"))
 
-func _on_connection_state_changed(state: String) -> void:
+func _on_connection_state_changed(_state: String) -> void:
+    _refresh_status()
+
+func _on_server_tick_changed(_tick: int) -> void:
+    _refresh_status()
+
+func _on_network_error(message_ru: String) -> void:
+    var label := get_node_or_null("Hud/NetError")
+    if label:
+        label.text = message_ru
+
+func _refresh_status() -> void:
     var status := get_node_or_null("Hud/Status")
     if status:
-        status.text = "Серверный мир: %s" % state
+        status.text = "Серверный мир: %s • тик сервера: %d" % [network.status_text_ru(), network.last_server_tick]

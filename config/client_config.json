@@ -1,0 +1,9 @@
+{
+  "server_url": "http://127.0.0.1:8080",
+  "websocket_url": "ws://127.0.0.1:8080/ws",
+  "protocol_version": 1,
+  "heartbeat_interval_ms": 5000,
+  "reconnect_timeout": 60,
+  "max_message_size": 16384,
+  "environment": "development"
+}
