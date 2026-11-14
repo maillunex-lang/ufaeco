@@ -49,6 +49,9 @@ const ERROR_TEXTS_RU := {
 	"enterprise_name_taken": "Предприятие с таким названием уже есть.",
 	"unknown_product": "Неизвестный товар.",
 	"insufficient_inventory": "Недостаточно товара на складе.",
+	"company_bankrupt": "Компания обанкротилась: операции недоступны.",
+	"loan_limit_exceeded": "Превышен лимит кредита.",
+	"invalid_amount": "Неверная сумма.",
 }
 
 const DISCONNECT_TEXTS_RU := {
@@ -63,6 +66,9 @@ var server_url: String = "http://127.0.0.1:8080"
 var websocket_url: String = "ws://127.0.0.1:8080/ws"
 var connected: bool = false
 var last_server_tick: int = 0
+var economy_day: int = 0
+## Текущие цены по товарам, копейки: {"bread": 9500, ...}
+var prices: Dictionary = {}
 var player_id: String = ""
 var session_id: String = ""
 var state: String = "disconnected"
@@ -148,6 +154,8 @@ func submit_intent(intent: Dictionary) -> bool:
 func apply_snapshot(snapshot: Dictionary) -> void:
 	if not snapshot.has("server_tick"):
 		return
+	economy_day = int(snapshot.get("economy_day", economy_day))
+	prices = snapshot.get("prices", prices)
 	var tick := int(snapshot["server_tick"])
 	if tick != last_server_tick:
 		last_server_tick = tick

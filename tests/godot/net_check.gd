@@ -46,6 +46,9 @@ func _run() -> void:
 	check(await wait_until(func(): return ticks.size() >= 2 and client.last_server_tick > 0, 3.0), "server_tick растёт (%d)" % client.last_server_tick)
 	check(client.status_text_ru() == "в сети", "статус по-русски: " + client.status_text_ru())
 
+	check(client.prices.has("bread") and int(client.prices["bread"]) > 0, "цены из snapshot: %s" % str(client.prices))
+	check(client.economy_day >= 0, "экономический день в snapshot: %d" % client.economy_day)
+
 	print("2. команды")
 	var rid: String = client.send_command("company.create", {"name": "Тест-" + login})
 	check(rid != "", "команда отправлена")
@@ -54,6 +57,14 @@ func _run() -> void:
 	var bad: String = client.send_command("company.create", {"name": "Хакер", "balance_cents": 999999999})
 	await wait_until(func(): return results.has(bad), 3.0)
 	check(results.get(bad, {}).get("ok", true) == false, "клиентский баланс отклонён сервером")
+
+	var cid: String = results[rid]["result"]["company"]["id"]
+	var trade: String = client.send_command("economy.trade", {"company_id": cid, "product_id": "fuel", "side": "buy", "quantity": 5})
+	await wait_until(func(): return results.has(trade), 3.0)
+	check(results.get(trade, {}).get("ok", false) == true, "покупка у NPC-торгового дома")
+	var forged: String = client.send_command("economy.trade", {"company_id": cid, "product_id": "fuel", "side": "buy", "quantity": 1, "price_cents": 1})
+	await wait_until(func(): return results.has(forged), 3.0)
+	check(results.get(forged, {}).get("ok", true) == false, "клиент не может задать цену")
 
 	print("3. reconnect")
 	var old_session: String = client.session_id

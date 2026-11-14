@@ -26,7 +26,13 @@
     "company.list",
     "company.get",
     "company.journal",
-    "enterprise.create"
+    "enterprise.create",
+    "economy.get_catalog",
+    "economy.get_prices",
+    "economy.trade",
+    "bank.get_loan",
+    "bank.take_loan",
+    "bank.repay_loan"
   ],
   "error_codes": [
     "invalid_message",
@@ -54,7 +60,10 @@
     "company_name_taken",
     "enterprise_name_taken",
     "unknown_product",
-    "insufficient_inventory"
+    "insufficient_inventory",
+    "company_bankrupt",
+    "loan_limit_exceeded",
+    "invalid_amount"
   ],
   "disconnect_reasons": [
     "client_closing",

@@ -25,6 +25,7 @@ import { LoginGuard } from '../security/login-guard.js';
 import type { SessionService } from '../sessions/index.js';
 import type { World, WorldSnapshot } from '../world/index.js';
 import type { CompanyService } from '../companies/index.js';
+import type { EconomyService } from '../economy/service.js';
 
 const MAX_RATE_VIOLATIONS = 5;
 
@@ -63,8 +64,9 @@ export class Gateway {
     private readonly sessions: SessionService,
     private readonly world: World,
     private readonly companies: CompanyService,
+    economy: EconomyService,
   ) {
-    this.services = { accounts, companies, world };
+    this.services = { accounts, companies, economy, world };
     this.wss = new WebSocketServer({ noServer: true, maxPayload: cfg.maxMessageSize });
     this.wss.on('connection', (ws) => this.onConnection(ws));
   }

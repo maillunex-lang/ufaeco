@@ -7,6 +7,7 @@ export interface CompanyView {
   name: string;
   owner_player_id: string;
   balance_cents: number;
+  status: string;
 }
 
 const unique = (e: unknown, code: string) => {
@@ -37,7 +38,7 @@ export class CompanyService {
   /** Возвращает компанию только владельцу: чужая → forbidden, несуществующая → not_found. */
   async getOwned(tx: Queryable, playerId: string, companyId: string, lock = false): Promise<CompanyView> {
     const r = await tx.query<CompanyView & { balance_cents: string }>(
-      `SELECT id, name, owner_player_id, balance_cents FROM companies WHERE id = $1 ${lock ? 'FOR UPDATE' : ''}`,
+      `SELECT id, name, owner_player_id, balance_cents, status FROM companies WHERE id = $1 ${lock ? 'FOR UPDATE' : ''}`,
       [companyId],
     );
     const row = r.rows[0];
@@ -46,9 +47,13 @@ export class CompanyService {
     return { ...row, balance_cents: Number(row.balance_cents) };
   }
 
+  assertActive(c: CompanyView): void {
+    if (c.status !== 'active') throw new DomainError('company_bankrupt');
+  }
+
   async listOwned(tx: Queryable, playerId: string): Promise<CompanyView[]> {
     const r = await tx.query<CompanyView & { balance_cents: string }>(
-      'SELECT id, name, owner_player_id, balance_cents FROM companies WHERE owner_player_id = $1 ORDER BY created_at, id',
+      'SELECT id, name, owner_player_id, balance_cents, status FROM companies WHERE owner_player_id = $1 ORDER BY created_at, id',
       [playerId],
     );
     return r.rows.map((x) => ({ ...x, balance_cents: Number(x.balance_cents) }));
@@ -101,7 +106,7 @@ export class CompanyService {
   // ---- инвентарь (серверный API; клиентской команды «выдать товар» не существует)
 
   async inventory(tx: Queryable, companyId: string): Promise<Record<string, number>> {
-    const r = await tx.query<{ product_id: string; quantity: string }>('SELECT product_id, quantity FROM inventory_items WHERE company_id = $1 ORDER BY product_id', [companyId]);
+    const r = await tx.query<{ product_id: string; quantity: string }>('SELECT product_id, quantity FROM inventory_items WHERE company_id = $1 AND quantity > 0 ORDER BY product_id', [companyId]);
     return Object.fromEntries(r.rows.map((x) => [x.product_id, Number(x.quantity)]));
   }
 
@@ -124,7 +129,7 @@ export class CompanyService {
   // ---- предприятия
 
   async createEnterprise(tx: Queryable, playerId: string, companyId: string, kind: EnterpriseKind, name: string) {
-    await this.getOwned(tx, playerId, companyId, true); // FOR UPDATE: сериализует списания компании
+    this.assertActive(await this.getOwned(tx, playerId, companyId, true)); // FOR UPDATE: сериализует списания компании
     let id: string;
     try {
       id = (await tx.query<{ id: string }>('INSERT INTO enterprises (company_id, kind, name) VALUES ($1,$2,$3) RETURNING id', [companyId, kind, name])).rows[0]!.id;
@@ -136,7 +141,7 @@ export class CompanyService {
   }
 
   async enterprises(tx: Queryable, companyId: string) {
-    const r = await tx.query<{ id: string; kind: string; name: string }>('SELECT id, kind, name FROM enterprises WHERE company_id = $1 ORDER BY created_at, id', [companyId]);
+    const r = await tx.query<{ id: string; kind: string; name: string }>('SELECT id, kind, name FROM enterprises WHERE company_id = $1 ORDER BY seq', [companyId]);
     return r.rows;
   }
 }

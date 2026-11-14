@@ -16,6 +16,8 @@ const schema = z.object({
   RECONNECT_TIMEOUT: intFrom(60, 1, 86400),
   MAX_MESSAGE_SIZE: intFrom(16384, 256, 1048576),
   HEARTBEAT_INTERVAL_MS: intFrom(5000, 100, 60000),
+  /** Тиков в экономическом дне; 0 — автоматический расчёт отключён (тесты). */
+  ECONOMY_DAY_TICKS: intFrom(600, 0, 10_000_000),
   RATE_LIMIT_BURST: intFrom(30, 1, 1000),
   RATE_LIMIT_PER_SECOND: intFrom(10, 1, 1000),
 });
@@ -35,6 +37,7 @@ export interface ServerConfig {
   /** байты */
   maxMessageSize: number;
   heartbeatIntervalMs: number;
+  economyDayTicks: number;
   rateLimitBurst: number;
   rateLimitPerSecond: number;
 }
@@ -62,6 +65,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     reconnectTimeout: e.RECONNECT_TIMEOUT,
     maxMessageSize: e.MAX_MESSAGE_SIZE,
     heartbeatIntervalMs: e.HEARTBEAT_INTERVAL_MS,
+    economyDayTicks: e.ECONOMY_DAY_TICKS,
     rateLimitBurst: e.RATE_LIMIT_BURST,
     rateLimitPerSecond: e.RATE_LIMIT_PER_SECOND,
   };
