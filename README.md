@@ -52,7 +52,11 @@ npm test
    ```bash
    godot --headless --path . --script res://tests/godot/net_check.gd
    ```
-5. При экспорте в Android добавьте `*.json` в фильтр ресурсов экспорта (Export → Resources → Filters to export non-resource files),
+5. Проверка карты (нужны запущенный сервер и виртуальный экран):
+   ```bash
+   xvfb-run -a godot --path . --rendering-driver opengl3 --script res://tests/godot/map_check.gd
+   ```
+6. При экспорте в Android добавьте `*.json` в фильтр ресурсов экспорта (Export → Resources → Filters to export non-resource files),
    иначе `config/client_config.json` и `protocol/protocol.json` не попадут в APK.
 
 ## Переменные конфигурации сервера

@@ -5,9 +5,6 @@
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
-[node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(640, 360)
-
 [node name="Hud" type="CanvasLayer" parent="."]
 
 [node name="UI" type="Control" parent="Hud"]
@@ -23,8 +20,8 @@ mouse_filter = 2
 layout_mode = 0
 offset_left = 24.0
 offset_top = 20.0
-offset_right = 900.0
-offset_bottom = 150.0
+offset_right = 560.0
+offset_bottom = 96.0
 
 [node name="Box" type="VBoxContainer" parent="Hud/UI/TopPanel"]
 layout_mode = 2
@@ -32,8 +29,8 @@ layout_mode = 2
 [node name="Title" type="Label" parent="Hud/UI/TopPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "БАШЭКО Online — единый рынок Башкортостана"
+theme_override_font_sizes/font_size = 20
+text = "БАШЭКО Online — Уфа"
 
 [node name="Status" type="Label" parent="Hud/UI/TopPanel/Box"]
 unique_name_in_owner = true
@@ -45,31 +42,31 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.816, 0.345, 0.29, 1)
 
-[node name="Actions" type="HBoxContainer" parent="Hud/UI"]
+[node name="LotPanel" type="PanelContainer" parent="Hud/UI"]
 layout_mode = 0
-offset_left = 24.0
-offset_top = 636.0
-offset_right = 760.0
-offset_bottom = 696.0
-theme_override_constants/separation = 14
+offset_left = 940.0
+offset_top = 500.0
+offset_right = 1256.0
+offset_bottom = 700.0
 
-[node name="RentButton" type="Button" parent="Hud/UI/Actions"]
-custom_minimum_size = Vector2(230, 56)
+[node name="Box" type="VBoxContainer" parent="Hud/UI/LotPanel"]
+layout_mode = 2
+
+[node name="LotTitle" type="Label" parent="Hud/UI/LotPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Выберите участок"
+
+[node name="LotInfo" type="Label" parent="Hud/UI/LotPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+text = "Нажмите на участок карты. Перетаскивание — сдвиг, колесо или щипок — масштаб."
+
+[node name="BuyButton" type="Button" parent="Hud/UI/LotPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 disabled = true
-tooltip_text = "Появится на следующих этапах"
-text = "Аренда помещений"
-
-[node name="ContractsButton" type="Button" parent="Hud/UI/Actions"]
-custom_minimum_size = Vector2(230, 56)
-layout_mode = 2
-disabled = true
-tooltip_text = "Появится на следующих этапах"
-text = "Контракты игроков"
-
-[node name="MarketButton" type="Button" parent="Hud/UI/Actions"]
-custom_minimum_size = Vector2(230, 56)
-layout_mode = 2
-disabled = true
-tooltip_text = "Появится на следующих этапах"
-text = "Общий рынок"
+text = "Купить участок"

@@ -5,12 +5,14 @@ import type { Queryable } from '../persistence/db.js';
 import type { CommandName } from '../protocol/schemas.js';
 import type { EconomyService } from '../economy/service.js';
 import { catalogView } from '../economy/service.js';
+import type { MapService } from '../world_map/service.js';
 import type { World } from '../world/index.js';
 
 export interface Services {
   accounts: AccountService;
   companies: CompanyService;
   economy: EconomyService;
+  map: MapService;
   world: World;
 }
 
@@ -86,5 +88,11 @@ export const commandHandlers: Record<CommandName, Handler> = {
 
   'bank.repay_loan': async ({ tx, playerId, services }, args) => ({
     loan: await services.economy.repayLoan(tx, playerId, args.company_id, args.amount_cents),
+  }),
+
+  'map.get_city': async ({ tx, services }, args) => ({ city: await services.map.getCity(tx, args.city_id) }),
+
+  'map.buy_lot': async ({ tx, playerId, services }, args) => ({
+    purchase: await services.map.buyLot(tx, playerId, args.company_id, args.lot_id),
   }),
 };

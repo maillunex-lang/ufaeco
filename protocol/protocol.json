@@ -32,7 +32,9 @@
     "economy.trade",
     "bank.get_loan",
     "bank.take_loan",
-    "bank.repay_loan"
+    "bank.repay_loan",
+    "map.get_city",
+    "map.buy_lot"
   ],
   "error_codes": [
     "invalid_message",
@@ -63,7 +65,9 @@
     "insufficient_inventory",
     "company_bankrupt",
     "loan_limit_exceeded",
-    "invalid_amount"
+    "invalid_amount",
+    "lot_taken",
+    "lot_not_for_sale"
   ],
   "disconnect_reasons": [
     "client_closing",
