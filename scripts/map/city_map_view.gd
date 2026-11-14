@@ -1,62 +1,109 @@
 class_name CityMapView
 extends Node2D
-## Городская карта в стиле Capitalism 2: сетка тайлов, дороги, река, участки земли с зонами.
+## Изометрическая городская карта (стиль Capitalism 2): тайлы земли, дороги, река, участки и застройка.
+## Спрайты — Kenney, CC0 (assets/art/iso/CREDITS.md). Здания на участках пока декоративные.
 ## Управление: перетаскивание — сдвиг, колесо/щипок — масштаб, касание/клик по участку — выбор.
 
 signal lot_selected(lot: Dictionary)
 
-const TILE := 32.0
-const MIN_ZOOM := 0.4
-const MAX_ZOOM := 2.5
+const HALF_W := 66.0   # половина ширины ромба тайла (132 px)
+const HALF_H := 33.0   # половина высоты ромба (66 px)
+const MIN_ZOOM := 0.12
+const MAX_ZOOM := 1.6
+const START_ZOOM := 0.42
 const TAP_SLOP := 10.0
+const DIR := "res://assets/art/iso/"
+
+# Наборы зданий по зонам (номера buildingTiles_NNN из Kenney Isometric Buildings #1).
+const BUILDINGS := {
+	"commercial": [1, 2, 3, 4, 9, 10, 16, 17, 18, 20, 26, 28, 34, 41, 99, 100, 101, 108, 109, 113, 115, 116, 117, 123, 124, 125],
+	"residential": [14, 21, 22, 29, 30, 32, 36, 37, 38, 39, 42, 43, 44, 45, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56],
+	"industrial": [11, 19, 27, 35, 85, 92, 93, 106, 114, 122],
+}
 
 var city: Dictionary = {}
 var my_company_id: String = ""
 var selected_lot_id: String = ""
-
-var _lots_by_id: Dictionary = {}
-var _grid_lot: Dictionary = {} # "x,y" -> lot
-var _dragging := false
-var _press_pos := Vector2.ZERO
-var _moved := 0.0
-var _touches: Dictionary = {}
-var _pinch_start_dist := 0.0
-var _pinch_start_zoom := 1.0
 var viewport_size := Vector2(1280, 720)
 
-const ZONE_COLORS := {
-	"residential": Color("#cfe9c3"),
-	"commercial": Color("#f6e2a0"),
-	"industrial": Color("#bfd0d6"),
-	"park": Color("#7fc47a"),
-}
+var _tex := {}
+var _bld_tex := {}
+var _offsets := {}
+var _lots_by_id := {}
+var _grid_lot := {}
+var _objects: Array = [] # [depth, gx, Texture2D, Vector2 pos]
+var _dragging := false
+var _moved := 0.0
+var _touches := {}
+var _pinch_start_dist := 0.0
+var _pinch_start_zoom := 1.0
+
+
+func _init() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	for n in ["ground_grass", "water", "road_ew", "road_ns", "road_cross", "bridge", "park_tree"]:
+		_tex[n] = load(DIR + n + ".png")
+	for zone in BUILDINGS:
+		for id in BUILDINGS[zone]:
+			if not _bld_tex.has(id):
+				_bld_tex[id] = load(DIR + "buildings/b%03d.png" % id)
+
+
+static func iso(gx: float, gy: float) -> Vector2:
+	return Vector2((gx - gy) * HALF_W, (gx + gy) * HALF_H)
+
+
+## Вертикальный сдвиг здания, чтобы его верхняя грань совпала с гранью земли (по левой вершине ромба).
+func _offset(tex: Texture2D) -> float:
+	if _offsets.has(tex):
+		return _offsets[tex]
+	var img := tex.get_image()
+	var y := 0
+	while y < img.get_height() and img.get_pixel(3, y).a < 0.5:
+		y += 1
+	var off := float(y) - 33.0
+	_offsets[tex] = off
+	return off
 
 
 func set_city(data: Dictionary) -> void:
 	city = data
 	_lots_by_id.clear()
 	_grid_lot.clear()
+	_objects.clear()
 	for lot in city.get("lots", []):
 		_lots_by_id[lot["id"]] = lot
+		var zone: String = lot["zone"]
+		var lot_seed: int = hash(str(lot["id"]))
 		for dy in range(int(lot["h"])):
 			for dx in range(int(lot["w"])):
-				_grid_lot["%d,%d" % [int(lot["x"]) + dx, int(lot["y"]) + dy]] = lot
+				var gx := int(lot["x"]) + dx
+				var gy := int(lot["y"]) + dy
+				_grid_lot["%d,%d" % [gx, gy]] = lot
+				var tex: Texture2D
+				if zone == "park":
+					tex = _tex["park_tree"]
+				else:
+					var set_: Array = BUILDINGS[zone]
+					tex = _bld_tex[set_[absi(hash("%d:%d:%d" % [lot_seed, gx, gy])) % set_.size()]]
+				var pos := iso(gx, gy) - Vector2(tex.get_width() / 2.0, _offset(tex))
+				_objects.append([gx + gy, gx, tex, pos])
+	_objects.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
 	queue_redraw()
 
 
-## Обновляет данные без сброса камеры (после покупки).
 func refresh_city(data: Dictionary) -> void:
 	set_city(data)
 
 
+## Камера: центр города (коммерческий центр) при заданном масштабе.
 func fit_to_view(size: Vector2) -> void:
 	viewport_size = size
 	if city.is_empty():
 		return
-	var map_px := Vector2(float(city["width"]), float(city["height"])) * TILE
-	var z := minf(size.x / map_px.x, size.y / map_px.y) * 0.95
-	scale = Vector2(z, z)
-	position = (size - map_px * z) / 2.0
+	var center := iso(float(city["width"]) * 0.42, float(city["height"]) * 0.5) + Vector2(0, HALF_H)
+	scale = Vector2(START_ZOOM, START_ZOOM)
+	position = size / 2.0 - center * START_ZOOM
 
 
 func selected_lot() -> Dictionary:
@@ -69,59 +116,38 @@ func _draw() -> void:
 	var w := int(city["width"])
 	var h := int(city["height"])
 	var tiles: Array = city["tiles"]
-	draw_rect(Rect2(-8, -8, w * TILE + 16, h * TILE + 16), BashPalette.GREEN_DEEP.lerp(BashPalette.MINT, 0.6))
-	for y in range(h):
-		var row: String = tiles[y]
-		for x in range(w):
-			var r := Rect2(x * TILE, y * TILE, TILE, TILE)
-			match row[x]:
+	# 1. Земля: от дальних тайлов к ближним.
+	for s in range(w + h - 1):
+		for gx in range(maxi(0, s - h + 1), mini(w - 1, s) + 1):
+			var gy := s - gx
+			var t: Texture2D
+			match String(tiles[gy])[gx]:
 				"#":
-					draw_rect(r, BashPalette.ROAD)
-					_road_marks(x, y, tiles, w, h)
+					t = _tex["road_cross"] if (gx % 5 == 0 and gy % 5 == 0) else (_tex["road_ew"] if gy % 5 == 0 else _tex["road_ns"])
 				"~":
-					draw_rect(r, BashPalette.TEAL)
-					if (x + y) % 3 == 0:
-						draw_line(r.position + Vector2(6, 12), r.position + Vector2(20, 12), BashPalette.TEAL_LIGHT, 2.0)
+					t = _tex["water"]
 				"=":
-					draw_rect(r, BashPalette.ROAD.lerp(BashPalette.WHITE, 0.2))
-					if y % 5 == 0: # мост вдоль улицы: перила сверху и снизу
-						draw_rect(Rect2(r.position, Vector2(TILE, 3)), BashPalette.TEAL_DEEP)
-						draw_rect(Rect2(r.position + Vector2(0, TILE - 3), Vector2(TILE, 3)), BashPalette.TEAL_DEEP)
-					else: # набережная вдоль реки: перила по бокам
-						draw_rect(Rect2(r.position, Vector2(3, TILE)), BashPalette.TEAL_DEEP)
-						draw_rect(Rect2(r.position + Vector2(TILE - 3, 0), Vector2(3, TILE)), BashPalette.TEAL_DEEP)
+					t = _tex["bridge"]
 				_:
-					draw_rect(r, BashPalette.MINT.lerp(BashPalette.CREAM, 0.5))
+					t = _tex["ground_grass"]
+			draw_texture(t, iso(gx, gy) - Vector2(HALF_W, 0))
+	# 2. Здания и деревья (уже отсортированы по глубине).
+	for o in _objects:
+		draw_texture(o[2], o[3])
+	# 3. Границы владения и выделение.
 	for lot in city["lots"]:
-		_draw_lot(lot)
-
-
-func _road_marks(x: int, y: int, tiles: Array, w: int, h: int) -> void:
-	var c := Vector2(x + 0.5, y + 0.5) * TILE
-	var horiz: bool = (x > 0 and String(tiles[y])[x - 1] in "#=") and (x < w - 1 and String(tiles[y])[x + 1] in "#=")
-	if horiz and y % 5 == 0:
-		draw_line(c - Vector2(8, 0), c + Vector2(8, 0), BashPalette.WHITE, 2.0)
-	elif x % 5 == 0:
-		draw_line(c - Vector2(0, 8), c + Vector2(0, 8), BashPalette.WHITE, 2.0)
-
-
-func _draw_lot(lot: Dictionary) -> void:
-	var r := Rect2(float(lot["x"]) * TILE, float(lot["y"]) * TILE, float(lot["w"]) * TILE, float(lot["h"]) * TILE).grow(-2.0)
-	var base: Color = ZONE_COLORS.get(lot["zone"], BashPalette.CREAM)
-	draw_rect(r, base)
-	var owned: bool = lot.get("owner_company_id") != null
-	var mine: bool = owned and str(lot["owner_company_id"]) == my_company_id
-	var border: Color = BashPalette.TEAL_DEEP.lerp(base, 0.55)
-	var bw := 1.5
-	if owned:
-		border = BashPalette.GOLD if mine else BashPalette.TEAL_DEEP
-		bw = 3.0
-	draw_rect(r, border, false, bw)
-	if owned:
-		var flag := Rect2(r.position + Vector2(6, 6), Vector2(14, 14))
-		draw_rect(flag, BashPalette.GOLD if mine else BashPalette.TEAL)
-	if lot["id"] == selected_lot_id:
-		draw_rect(r.grow(2.0), BashPalette.GOLD_SOFT, false, 4.0)
+		var owned = lot.get("owner_company_id") != null
+		var sel: bool = lot["id"] == selected_lot_id
+		if not owned and not sel:
+			continue
+		var x := float(lot["x"])
+		var y := float(lot["y"])
+		var pts := PackedVector2Array([iso(x, y), iso(x + lot["w"], y), iso(x + lot["w"], y + lot["h"]), iso(x, y + lot["h"]), iso(x, y)])
+		if owned:
+			var mine: bool = str(lot["owner_company_id"]) == my_company_id
+			draw_polyline(pts, BashPalette.GOLD if mine else BashPalette.TEAL_DEEP, 7.0)
+		if sel:
+			draw_polyline(pts, BashPalette.GOLD_SOFT, 10.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -136,7 +162,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				_dragging = true
-				_press_pos = mb.position
 				_moved = 0.0
 			else:
 				if _dragging and _moved < TAP_SLOP:
@@ -151,7 +176,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		if st.pressed:
 			_touches[st.index] = st.position
 			if _touches.size() == 1:
-				_press_pos = st.position
 				_moved = 0.0
 			elif _touches.size() == 2:
 				_pinch_start_dist = _touch_distance()
@@ -168,9 +192,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			position += sd.relative
 			_moved += sd.relative.length()
 		elif _touches.size() == 2 and _pinch_start_dist > 0.0:
-			var mid := _touch_center()
 			var target := clampf(_pinch_start_zoom * _touch_distance() / _pinch_start_dist, MIN_ZOOM, MAX_ZOOM)
-			_zoom_at(mid, target / scale.x)
+			_zoom_at(_touch_center(), target / scale.x)
 			position += sd.relative * 0.5
 			_moved += TAP_SLOP
 
@@ -192,9 +215,23 @@ func _zoom_at(screen_pos: Vector2, factor: float) -> void:
 	scale = Vector2(new_zoom, new_zoom)
 
 
-func _tap(screen_pos: Vector2) -> void:
+## Экран → сетка (обратная изометрическая проекция).
+func grid_at(screen_pos: Vector2) -> Vector2i:
 	var local := (screen_pos - position) / scale.x
-	var key := "%d,%d" % [floori(local.x / TILE), floori(local.y / TILE)]
+	var u := local.x / HALF_W
+	var v := local.y / HALF_H
+	return Vector2i(floori((u + v) / 2.0), floori((v - u) / 2.0))
+
+
+## Экран-центр участка (для тестов и подсветки).
+func lot_screen_center(lot: Dictionary) -> Vector2:
+	var c := iso(float(lot["x"]) + float(lot["w"]) / 2.0, float(lot["y"]) + float(lot["h"]) / 2.0)
+	return position + c * scale.x
+
+
+func _tap(screen_pos: Vector2) -> void:
+	var g := grid_at(screen_pos)
+	var key := "%d,%d" % [g.x, g.y]
 	if _grid_lot.has(key):
 		selected_lot_id = _grid_lot[key]["id"]
 		lot_selected.emit(_grid_lot[key])
