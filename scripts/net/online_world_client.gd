@@ -201,6 +201,8 @@ func _open_socket(new_state: String) -> void:
 	_was_open = false
 	connected = false
 	_peer = WebSocketPeer.new()
+	_peer.inbound_buffer_size = 8 * 1024 * 1024 # карта города — десятки/сотни КБ
+	_peer.max_queued_packets = 4096
 	var err := _peer.connect_to_url(websocket_url)
 	if err != OK:
 		_peer = null

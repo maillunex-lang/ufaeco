@@ -29,7 +29,8 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db } = {}): 
   const http = Fastify({ logger: config.environment !== 'test' });
   let gateway: Gateway;
   const companies = new CompanyService();
-  const economy = new EconomyService(companies);
+  const map = new MapService(companies);
+  const economy = new EconomyService(companies, map);
   let dayRunning = false;
   const refreshEconomy = async () => {
     const [day, prices] = await Promise.all([economy.currentDay(db), economy.getPrices(db)]);
@@ -40,7 +41,6 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db } = {}): 
     dayRunning = true;
     economy.runDay(db).then(refreshEconomy).catch((e) => http.log.error(e, 'Ошибка экономического дня')).finally(() => { dayRunning = false; });
   });
-  const map = new MapService(companies);
   gateway = new Gateway(config, db, accounts, sessions, world, companies, economy, map);
   let sweeper: NodeJS.Timeout | undefined;
 

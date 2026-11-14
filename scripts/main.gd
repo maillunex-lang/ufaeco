@@ -9,6 +9,8 @@ var company_name: String = ""
 var balance_cents: int = 0
 var _pending: Dictionary = {} # request_id -> Callable(payload)
 var _bootstrapped := false
+var _seen_day := -1
+var population: int = 0
 var catalog: Dictionary = {} # kind -> {cost_cents, wage_cents_per_day, recipe, zones}
 var _build_kinds: Array[String] = []
 
@@ -39,6 +41,7 @@ func _ready() -> void:
 	network.server_tick_changed.connect(func(_t): _refresh_status())
 	network.network_error.connect(func(m): error_label.text = m)
 	network.command_result_received.connect(_on_command_result)
+	network.world_snapshot_received.connect(_on_snapshot)
 	network.connect_to_world()
 
 
@@ -87,8 +90,18 @@ func _use_company(c: Dictionary) -> void:
 	_load_city(true)
 
 
+## Город растёт по экономическим дням: при смене дня подтягиваем свежую карту.
+func _on_snapshot(snapshot: Dictionary) -> void:
+	var day := int(snapshot.get("economy_day", 0))
+	if _seen_day >= 0 and day != _seen_day and company_id != "":
+		_load_city(false)
+	_seen_day = day
+
+
 func _load_city(fit: bool) -> void:
 	_call("map.get_city", {"city_id": "ufa"}, func(r):
+		population = int(r["city"].get("population", 0))
+		_refresh_status()
 		map_view.set_city(r["city"])
 		if fit:
 			map_view.fit_to_view(get_viewport_rect().size)
@@ -120,6 +133,8 @@ func _on_lot_selected(lot: Dictionary) -> void:
 		_show_build_ui(lot)
 	elif owner != null:
 		lot_info.text = "Владелец: %s" % str(lot.get("owner_name", "—"))
+	elif not lot.get("for_sale", false):
+		lot_info.text = "Застроено городом (уровень %d из 3). Не продаётся." % int(lot.get("development", 0))
 	else:
 		lot_info.text = "Участок %s\nЦена: %s\nПокупает: %s" % [str(lot["id"]), BashFormat.money(price), company_name]
 		buy_button.disabled = company_id == "" or price > balance_cents
@@ -195,4 +210,5 @@ func _on_buy_pressed() -> void:
 
 func _refresh_status() -> void:
 	var money := "" if company_id == "" else " • %s: %s" % [company_name, BashFormat.money(balance_cents)]
-	status_label.text = "Сервер: %s • день %d%s" % [network.status_text_ru(), network.economy_day, money]
+	var pop := "" if population == 0 else " • население: %s" % BashFormat.thousands(population)
+	status_label.text = "Сервер: %s • день %d%s%s" % [network.status_text_ru(), network.economy_day, pop, money]

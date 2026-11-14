@@ -36,6 +36,9 @@ const KIND_STYLE := {
 	"farm": {"tall": 2.0, "sprite": 27, "tint": Color(0.8, 1, 0.75)},
 }
 
+# Высота городской застройки по уровню развития (1..3): город растёт вверх.
+const DEV_TALL := [1.0, 1.0, 1.3, 1.7]
+
 var _tex := {}
 var _bld_tex := {}
 var _offsets := {}
@@ -52,7 +55,7 @@ var _pinch_start_zoom := 1.0
 
 func _init() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	for n in ["ground_grass", "water", "road_ew", "road_ns", "road_cross", "bridge", "park_tree"]:
+	for n in ["ground_grass", "water", "road", "bridge", "park_tree", "lot_empty"]:
 		_tex[n] = load(DIR + n + ".png")
 	for k in KIND_STYLE:
 		var id: int = KIND_STYLE[k]["sprite"]
@@ -90,6 +93,7 @@ func set_city(data: Dictionary) -> void:
 	for lot in city.get("lots", []):
 		_lots_by_id[lot["id"]] = lot
 		var zone: String = lot["zone"]
+		var dev: int = int(lot.get("development", 0))
 		var lot_seed: int = hash(str(lot["id"]))
 		var building = lot.get("building")
 		if building != null:
@@ -102,13 +106,18 @@ func set_city(data: Dictionary) -> void:
 				if building != null:
 					continue # вместо декора на участке стоит игровое здание
 				var tex: Texture2D
+				var tall := 1.0
 				if zone == "park":
 					tex = _tex["park_tree"]
+				elif dev == 0:
+					tex = _tex["lot_empty"] # пустырь: размеченный участок
 				else:
 					var set_: Array = BUILDINGS[zone]
 					tex = _bld_tex[set_[absi(hash("%d:%d:%d" % [lot_seed, gx, gy])) % set_.size()]]
-				var pos := iso(gx, gy) - Vector2(tex.get_width() / 2.0, _offset(tex))
-				_objects.append([gx + gy, gx, tex, pos, Vector2.ONE, Color.WHITE])
+					tall = DEV_TALL[dev]
+				var top := iso(gx, gy)
+				var pos := top - Vector2(tex.get_width() / 2.0, _offset(tex)) + Vector2(0, tex.get_height() * (1.0 - tall))
+				_objects.append([gx + gy, gx, tex, pos, Vector2(1.0, tall), Color.WHITE])
 	_objects.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
 	queue_redraw()
 
@@ -116,16 +125,19 @@ func set_city(data: Dictionary) -> void:
 func _add_building(lot: Dictionary, building: Dictionary) -> void:
 	var style: Dictionary = KIND_STYLE.get(building["kind"], KIND_STYLE["shop"])
 	var tex: Texture2D = _bld_tex[style["sprite"]]
-	var sc := float(lot["w"])
-	var x := int(lot["x"])
-	var y := int(lot["y"])
-	var sy: float = float(style["tall"])
+	var lx := int(lot["x"])
+	var ly := int(lot["y"])
+	var lw := int(lot["w"])
+	var lh := int(lot["h"])
+	var sc := (lw + lh) / 2.0
+	var sy: float = float(style["tall"]) * sc / 2.0
 	var h := float(tex.get_height())
-	# Низ спрайта остаётся на уровне участка; вверх здание растягивается до нужной высоты.
-	var pos := iso(x, y) - Vector2(tex.get_width() * sc / 2.0, _offset(tex) * sc) + Vector2(0, h * sc - h * sy)
-	_objects.append([x + y + int(lot["w"]) + int(lot["h"]) - 2, x + int(lot["w"]) - 1, tex, pos, Vector2(sc, sy), style["tint"]])
-	var top := pos + Vector2(tex.get_width() * sc / 2.0, h * sy * 0.12)
-	_labels.append([top, "%s «%s»" % [BashFormat.kind(str(building["kind"])), str(building["name"])]])
+	# Спрайт стоит по центру прямоугольного участка; низ — на уровне земли, вверх здание растягивается.
+	var center := iso(lx + lw / 2.0, ly + lh / 2.0)
+	var top_y := center.y - HALF_H * sc
+	var pos := Vector2(center.x - tex.get_width() * sc / 2.0, top_y - _offset(tex) * sc + h * sc - h * sy)
+	_objects.append([lx + ly + lw + lh - 2, lx + lw - 1, tex, pos, Vector2(sc, sy), style["tint"]])
+	_labels.append([pos + Vector2(tex.get_width() * sc / 2.0, h * sy * 0.12), "%s «%s»" % [BashFormat.kind(str(building["kind"])), str(building["name"])]])
 
 
 func refresh_city(data: Dictionary) -> void:
@@ -137,7 +149,8 @@ func fit_to_view(size: Vector2) -> void:
 	viewport_size = size
 	if city.is_empty():
 		return
-	var center := iso(float(city["width"]) * 0.42, float(city["height"]) * 0.5) + Vector2(0, HALF_H)
+	var c: Dictionary = city.get("center", {"x": float(city["width"]) * 0.5, "y": float(city["height"]) * 0.5})
+	var center := iso(float(c["x"]), float(c["y"])) + Vector2(0, HALF_H)
 	scale = Vector2(START_ZOOM, START_ZOOM)
 	position = size / 2.0 - center * START_ZOOM
 
@@ -159,7 +172,7 @@ func _draw() -> void:
 			var t: Texture2D
 			match String(tiles[gy])[gx]:
 				"#":
-					t = _tex["road_cross"] if (gx % 5 == 0 and gy % 5 == 0) else (_tex["road_ew"] if gy % 5 == 0 else _tex["road_ns"])
+					t = _tex["road"]
 				"~":
 					t = _tex["water"]
 				"=":
@@ -179,7 +192,7 @@ func _draw() -> void:
 			continue
 		var x := float(lot["x"])
 		var y := float(lot["y"])
-		var pts := PackedVector2Array([iso(x, y), iso(x + lot["w"], y), iso(x + lot["w"], y + lot["h"]), iso(x, y + lot["h"]), iso(x, y)])
+		var pts := PackedVector2Array([iso(x, y), iso(x + float(lot["w"]), y), iso(x + float(lot["w"]), y + float(lot["h"])), iso(x, y + float(lot["h"])), iso(x, y)])
 		if owned:
 			var mine: bool = str(lot["owner_company_id"]) == my_company_id
 			draw_polyline(pts, BashPalette.GOLD if mine else BashPalette.TEAL_DEEP, 7.0)
