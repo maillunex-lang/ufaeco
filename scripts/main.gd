@@ -7,6 +7,9 @@ var world: EconomicWorld
 var network: OnlineWorldClient
 
 func _ready() -> void:
+    var ui := get_node_or_null("Hud/UI") as Control
+    if ui:
+        ui.theme = BashTheme.build()
     world = EconomicWorld.new()
     world.register_company("demo-farmer", "Демо-Агро", 1500000)
     world.register_company("demo-retail", "Демо-Маркет", 900000)
@@ -19,18 +22,11 @@ func _ready() -> void:
     network.connect_to_world()
     queue_redraw()
 
+const MAP_PLACEHOLDER := preload("res://assets/art/reference/city_overview.jpg")
+
 func _draw() -> void:
-    draw_rect(Rect2(0, 0, 1280, 720), Color("#101b25"))
-    draw_circle(Vector2(640, 360), 245.0, Color("#1c4a50"))
-    draw_circle(Vector2(640, 360), 170.0, Color("#24616a"))
-    draw_string(ThemeDB.fallback_font, Vector2(470, 365), "Башкортостан • общий рынок", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color("#e5f2ed"))
-    draw_string(ThemeDB.fallback_font, Vector2(500, 405), "Уфа  |  Стерлитамак  |  Салават", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#b6d5d0"))
-    draw_rect(Rect2(100, 500, 220, 52), Color("#203640"))
-    draw_string(ThemeDB.fallback_font, Vector2(120, 533), "Аренда помещений", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#f3bf67"))
-    draw_rect(Rect2(360, 500, 220, 52), Color("#203640"))
-    draw_string(ThemeDB.fallback_font, Vector2(380, 533), "Контракты игроков", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#f3bf67"))
-    draw_rect(Rect2(620, 500, 220, 52), Color("#203640"))
-    draw_string(ThemeDB.fallback_font, Vector2(640, 533), "Общий рынок", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#f3bf67"))
+    # Временный фон: референс арт-направления (assets/art/reference). Будет заменён игровой картой.
+    draw_texture_rect(MAP_PLACEHOLDER, Rect2(0, 0, 1280, 720), false)
 
 func _on_connection_state_changed(_state: String) -> void:
     _refresh_status()
@@ -39,11 +35,11 @@ func _on_server_tick_changed(_tick: int) -> void:
     _refresh_status()
 
 func _on_network_error(message_ru: String) -> void:
-    var label := get_node_or_null("Hud/NetError")
+    var label := get_node_or_null("Hud/UI/TopPanel/Box/NetError")
     if label:
         label.text = message_ru
 
 func _refresh_status() -> void:
-    var status := get_node_or_null("Hud/Status")
+    var status := get_node_or_null("Hud/UI/TopPanel/Box/Status")
     if status:
         status.text = "Серверный мир: %s • тик сервера: %d" % [network.status_text_ru(), network.last_server_tick]
