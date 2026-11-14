@@ -42,4 +42,4 @@ func _on_network_error(message_ru: String) -> void:
 func _refresh_status() -> void:
     var status := get_node_or_null("Hud/UI/TopPanel/Box/Status")
     if status:
-        status.text = "Серверный мир: %s • тик сервера: %d" % [network.status_text_ru(), network.last_server_tick]
+        status.text = "Серверный мир: %s • тик: %d • экономический день: %d" % [network.status_text_ru(), network.last_server_tick, network.economy_day]

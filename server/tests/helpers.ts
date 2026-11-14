@@ -16,6 +16,7 @@ export function testConfig(over: Record<string, string> = {}): ServerConfig {
     SNAPSHOT_RATE: '10',
     MAX_MESSAGE_SIZE: '4096',
     RECONNECT_TIMEOUT: '60',
+    ECONOMY_DAY_TICKS: '0',
     ...over,
   });
 }

@@ -80,6 +80,14 @@
 | `company.get` | `{ company_id }` | `company, inventory, enterprises` (только владелец) |
 | `company.journal` | `{ company_id, limit?: 1..100 }` | `entries` (новые первыми) |
 | `enterprise.create` | `{ company_id, kind, name }` | `enterprise` (стоимость списывается с баланса) |
+| `economy.get_catalog` | `{}` | товары, виды предприятий (стоимость, зарплата, рецепт), параметры |
+| `economy.get_prices` | `{}` | `economy_day`, `prices` (цена, базовая, последние спрос/предложение) |
+| `economy.trade` | `{ company_id, product_id, side: buy\|sell, quantity: 1..10000 }` | сделка с NPC-торговым домом по цене ± спред; цену клиент не задаёт |
+| `bank.get_loan` | `{ company_id }` | `loan_cents` |
+| `bank.take_loan` | `{ company_id, amount_cents }` | `loan` |
+| `bank.repay_loan` | `{ company_id, amount_cents }` | `loan` |
+
+Операции над банкротом отклоняются кодом `company_bankrupt`. `world_snapshot` содержит `economy_day` и `prices` (копейки).
 
 Виды предприятий и стоимости — гипотезы: `server/src/companies/catalog.ts`.
 Команд «выдать деньги/товар» не существует; любое поле вроде `balance_cents` в `args` → `invalid_payload`.

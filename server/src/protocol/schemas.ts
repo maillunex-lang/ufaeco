@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SPEC } from './constants.js';
-import { ENTERPRISE_KIND_IDS } from '../companies/catalog.js';
+import { ENTERPRISE_KIND_IDS, PRODUCTS } from '../companies/catalog.js';
 
 const uuid = z.uuid();
 
@@ -64,6 +64,17 @@ export const commandArgSchemas = {
   'company.list': z.strictObject({}),
   'company.get': z.strictObject({ company_id: uuid }),
   'company.journal': z.strictObject({ company_id: uuid, limit: z.number().int().min(1).max(100).optional() }),
+  'economy.get_catalog': z.strictObject({}),
+  'economy.get_prices': z.strictObject({}),
+  'economy.trade': z.strictObject({
+    company_id: uuid,
+    product_id: z.enum(PRODUCTS),
+    side: z.enum(['buy', 'sell']),
+    quantity: z.number().int().min(1).max(10_000),
+  }),
+  'bank.get_loan': z.strictObject({ company_id: uuid }),
+  'bank.take_loan': z.strictObject({ company_id: uuid, amount_cents: z.number().int().min(1).max(1e12) }),
+  'bank.repay_loan': z.strictObject({ company_id: uuid, amount_cents: z.number().int().min(1).max(1e12) }),
   'enterprise.create': z.strictObject({ company_id: uuid, kind: z.enum(ENTERPRISE_KIND_IDS), name: companyName }),
 } as const;
 export type CommandName = keyof typeof commandArgSchemas;
@@ -97,6 +108,8 @@ export const serverPayloadSchemas = {
     server_tick: z.number().int(),
     server_time: z.number(),
     players_online: z.number().int(),
+    economy_day: z.number().int(),
+    prices: z.record(z.string(), z.number().int()),
     players: z.array(z.strictObject({ player_id: uuid, display_name: z.string() })),
   }),
   command_result: z.strictObject({

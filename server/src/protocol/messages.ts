@@ -47,5 +47,8 @@ export const ERROR_MESSAGES_RU: Record<string, string> = {
   enterprise_name_taken: 'Предприятие с таким названием уже есть',
   unknown_product: 'Неизвестный товар',
   insufficient_inventory: 'Недостаточно товара на складе',
+  company_bankrupt: 'Компания обанкротилась',
+  loan_limit_exceeded: 'Превышен лимит кредита',
+  invalid_amount: 'Неверная сумма',
   internal_error: 'Внутренняя ошибка сервера',
 };
