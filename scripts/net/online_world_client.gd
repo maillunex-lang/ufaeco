@@ -13,6 +13,7 @@ signal network_error(message_ru: String)
 
 const CONFIG_PATH := "res://config/client_config.json"
 const PROTOCOL_PATH := "res://protocol/protocol.json"
+const SETTINGS_PATH := "user://settings.cfg"
 const BACKOFF_SECONDS: Array[float] = [1.0, 2.0, 4.0, 8.0]
 
 const STATE_LABELS_RU := {
@@ -116,6 +117,41 @@ func connect_to_world(url: String = "") -> void:
 	_open_socket("connecting")
 
 
+## Адрес сервера, сохранённый на устройстве (user://settings.cfg); пусто — не задан.
+static func saved_server_url() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return ""
+	return str(cfg.get_value("server", "websocket_url", ""))
+
+
+## Проверка адреса: ws:// или wss://, хост, необязательный порт и путь.
+static func is_valid_ws_url(url: String) -> bool:
+	var re := RegEx.new()
+	re.compile("^wss?://[A-Za-z0-9.\\-]+(:[0-9]{1,5})?(/[^\\s]*)?$")
+	return re.search(url) != null
+
+
+## Сохраняет адрес сервера и переподключается к нему (новый вход гостем).
+func change_server(url: String) -> bool:
+	url = url.strip_edges()
+	if not is_valid_ws_url(url):
+		return false
+	var cfg := ConfigFile.new()
+	cfg.set_value("server", "websocket_url", url)
+	cfg.save(SETTINGS_PATH)
+	if _peer != null:
+		_intentional_close = true
+		_peer.close()
+		_peer = null
+	connected = false
+	session_id = ""
+	_resume_token = ""
+	_retry_left = -1.0
+	connect_to_world(url)
+	return true
+
+
 ## Регистрация аккаунта по логину и паролю (после успеха клиент в сети).
 func register_account(login: String, password: String, display_name: String = "") -> void:
 	var payload := {"login": login, "password": password}
@@ -209,6 +245,9 @@ func _load_config() -> void:
 	var override := OS.get_environment("BASHECO_WEBSOCKET_URL")
 	if not override.is_empty():
 		websocket_url = override
+	var saved := saved_server_url()
+	if not saved.is_empty():
+		websocket_url = saved # адрес, введённый игроком, важнее конфигурации
 	var proto := _read_json(PROTOCOL_PATH)
 	_protocol_version = int(proto.get("protocol_version", cfg.get("protocol_version", 1)))
 

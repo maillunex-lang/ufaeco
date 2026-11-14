@@ -40,6 +40,11 @@ var build_name: LineEdit
 var mode_buy_button: Button
 var mode_build_button: Button
 var sel := Vector2i(-1, -1)
+var server_dialog: PanelContainer
+var server_edit: LineEdit
+var server_hint: Label
+var server_button: Button
+var _ever_online := false
 var company_id: String = ""
 var company_name: String = ""
 var balance_cents: int = 0
@@ -68,6 +73,9 @@ func _ready() -> void:
 	add_child(map_view)
 	map_view.cell_selected.connect(_on_cell_selected)
 	_build_extra_ui(ui)
+	var blocker := Callable(self, "_over_ui")
+	region_view.is_blocked = blocker
+	map_view.is_blocked = blocker
 	_set_mode("region")
 	network = OnlineWorldClient.new()
 	add_child(network)
@@ -100,6 +108,11 @@ func _on_command_result(request_id: String, payload: Dictionary) -> void:
 
 func _on_connection_state_changed(state: String) -> void:
 	_refresh_status()
+	if state == "online":
+		_ever_online = true
+		server_dialog.visible = false
+	elif (state == "reconnecting" or state == "failed") and not _ever_online:
+		_show_server_dialog(true)
 	if state == "online" and not _bootstrapped:
 		_bootstrapped = true
 		_call("catalog.get", {}, func(r):
@@ -512,6 +525,72 @@ func _build_extra_ui(ui: Control) -> void:
 		row.add_child(l)
 		lv.add_child(row)
 	_build_cell_panel(ui)
+	_build_server_dialog(ui)
+
+
+## Над панелью/кнопкой интерфейса ли точка экрана (карта такие касания игнорирует).
+func _over_ui(pos: Vector2) -> bool:
+	var ui := get_node("Hud/UI") as Control
+	for n in ui.get_children():
+		if n is Control and (n as Control).visible and (n as Control).get_global_rect().has_point(pos):
+			return true
+	return false
+
+
+func _show_server_dialog(from_error: bool) -> void:
+	server_edit.text = network.websocket_url
+	server_hint.text = ("Не удалось подключиться к серверу. " if from_error else "") + "Введите адрес сервера (ws://адрес:порт/путь).\nЭмулятор Android: ws://10.0.2.2:8080/ws\nТелефон в той же сети: ws://IP-компьютера:8080/ws"
+	server_dialog.visible = true
+
+
+func _on_server_apply() -> void:
+	if network.change_server(server_edit.text):
+		server_dialog.visible = false
+		_bootstrapped = false
+		company_id = ""
+		error_label.text = ""
+	else:
+		server_hint.text = "Неверный адрес. Пример: ws://192.168.0.10:8080/ws"
+
+
+func _build_server_dialog(ui: Control) -> void:
+	server_button = Button.new()
+	server_button.text = "Сервер"
+	server_button.position = Vector2(1130, 24)
+	server_button.custom_minimum_size = Vector2(120, 48)
+	server_button.pressed.connect(func(): _show_server_dialog(false))
+	ui.add_child(server_button)
+	server_dialog = PanelContainer.new()
+	server_dialog.position = Vector2(300, 200)
+	server_dialog.custom_minimum_size = Vector2(680, 0)
+	ui.add_child(server_dialog)
+	var box := VBoxContainer.new()
+	server_dialog.add_child(box)
+	var t := Label.new()
+	t.text = "Адрес сервера"
+	t.add_theme_font_size_override("font_size", 24)
+	box.add_child(t)
+	server_hint = Label.new()
+	server_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	server_hint.custom_minimum_size = Vector2(640, 0)
+	box.add_child(server_hint)
+	server_edit = LineEdit.new()
+	server_edit.custom_minimum_size = Vector2(0, 56)
+	server_edit.placeholder_text = "ws://192.168.0.10:8080/ws"
+	box.add_child(server_edit)
+	var row := HBoxContainer.new()
+	box.add_child(row)
+	var ok := Button.new()
+	ok.text = "Подключиться"
+	ok.custom_minimum_size = Vector2(220, 56)
+	ok.pressed.connect(_on_server_apply)
+	row.add_child(ok)
+	var close := Button.new()
+	close.text = "Закрыть"
+	close.custom_minimum_size = Vector2(160, 56)
+	close.pressed.connect(func(): server_dialog.visible = false)
+	row.add_child(close)
+	server_dialog.visible = false
 
 
 func _build_cell_panel(ui: Control) -> void:

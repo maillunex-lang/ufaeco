@@ -59,8 +59,15 @@ npm test
    xvfb-run -a godot --path . --rendering-driver opengl3 --script res://tests/godot/map_check.gd
    xvfb-run -a godot --path . --rendering-driver opengl3 --script res://tests/godot/region_check.gd
    ```
-6. При экспорте в Android добавьте `*.json` в фильтр ресурсов экспорта (Export → Resources → Filters to export non-resource files),
-   иначе `config/client_config.json` и `protocol/protocol.json` не попадут в APK.
+6. Сборка отладочного APK (пресет `Android` уже в `export_presets.cfg`, фильтр `*.json` включён): нужны Godot 4.3 + export templates 4.3,
+   Android SDK (build-tools 34, platforms android-34), JDK 17+, debug-keystore в Editor Settings → Export → Android.
+   ```bash
+   godot --headless --path . --import
+   godot --headless --path . --export-debug "Android" build/basheco-debug.apk
+   ```
+   APK подписан только debug-ключом и не предназначен для публикации (`build/` и `*.apk` в `.gitignore`).
+7. Адрес сервера на устройстве: кнопка «Сервер» в шапке (диалог открывается сам, если подключиться не удалось). Адрес сохраняется на устройстве.
+   Эмулятор — `ws://10.0.2.2:8080/ws`; телефон — `ws://<IP компьютера в сети>:8080/ws`, сервер запускайте с `HOST=0.0.0.0`.
 
 ## Переменные конфигурации сервера
 

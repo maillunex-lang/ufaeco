@@ -6,3 +6,4 @@ dist/
 .godot/
 *.apk
 *.aab
+build/

@@ -9,6 +9,9 @@ const TAP_SLOP := 10.0
 
 var min_zoom := 0.12
 var max_zoom := 1.6
+## Возвращает true, если точка экрана над элементом интерфейса (панель, кнопка) — жесты карты игнорируются.
+var is_blocked: Callable = Callable()
+var _ignore := false
 var _dragging := false
 var _moved := 0.0
 var _touches := {}
@@ -19,6 +22,9 @@ var _pinch_start_zoom := 1.0
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_visible_in_tree():
 		return
+	# Эмулированные из касаний события мыши игнорируем: касания обрабатываются отдельно (иначе тап срабатывает дважды).
+	if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
@@ -27,7 +33,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			zoom_at(mb.position, 1.0 / 1.12)
 		elif mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
-				_dragging = true
+				_ignore = is_blocked.is_valid() and bool(is_blocked.call(mb.position))
+				_dragging = not _ignore
 				_moved = 0.0
 			else:
 				if _dragging and _moved < TAP_SLOP:
@@ -40,6 +47,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
 		if st.pressed:
+			if _touches.is_empty():
+				_ignore = is_blocked.is_valid() and bool(is_blocked.call(st.position))
+			if _ignore:
+				return
 			_touches[st.index] = st.position
 			if _touches.size() == 1:
 				_moved = 0.0
@@ -47,12 +58,18 @@ func _unhandled_input(event: InputEvent) -> void:
 				_pinch_start_dist = _touch_distance()
 				_pinch_start_zoom = scale.x
 		else:
+			if _ignore:
+				if _touches.is_empty():
+					_ignore = false
+				return
 			var was_single := _touches.size() == 1
 			_touches.erase(st.index)
 			if was_single and _moved < TAP_SLOP:
 				tapped.emit(st.position)
 	elif event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
+		if _ignore:
+			return
 		_touches[sd.index] = sd.position
 		if _touches.size() == 1:
 			position += sd.relative
