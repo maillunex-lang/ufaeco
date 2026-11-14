@@ -66,6 +66,20 @@ func _run() -> void:
 	await wait_until(func(): return results.has(forged), 3.0)
 	check(results.get(forged, {}).get("ok", true) == false, "клиент не может задать цену")
 
+	print("2b. карта")
+	var mapq: String = client.send_command("map.get_city", {"city_id": "ufa"})
+	await wait_until(func(): return results.has(mapq), 3.0)
+	var city: Dictionary = results.get(mapq, {}).get("result", {}).get("city", {})
+	check(not city.is_empty() and city["tiles"].size() == int(city["height"]), "карта города получена (%dx%d, участков: %d)" % [int(city.get("width", 0)), int(city.get("height", 0)), city.get("lots", []).size()])
+	var free_lot := {}
+	for l in city.get("lots", []):
+		if l["zone"] == "residential" and l["owner_company_id"] == null:
+			free_lot = l
+			break
+	var buy: String = client.send_command("map.buy_lot", {"company_id": cid, "lot_id": free_lot["id"]})
+	await wait_until(func(): return results.has(buy), 3.0)
+	check(results.get(buy, {}).get("ok", false) == true, "участок куплен")
+
 	print("3. reconnect")
 	var old_session: String = client.session_id
 	var old_player: String = client.player_id

@@ -4,6 +4,7 @@ import type { ServerConfig } from './config.js';
 import { AccountService } from './accounts/index.js';
 import { CompanyService } from './companies/index.js';
 import { EconomyService } from './economy/service.js';
+import { MapService } from './world_map/service.js';
 import { Gateway } from './net/gateway.js';
 import { createPool, type Db } from './persistence/db.js';
 import { runMigrations } from './persistence/migrate.js';
@@ -15,6 +16,7 @@ export interface GameServer {
   readonly db: Db;
   readonly world: World;
   readonly economy: EconomyService;
+  readonly map: MapService;
   start(): Promise<{ host: string; port: number }>;
   stop(): Promise<void>;
 }
@@ -38,7 +40,8 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db } = {}): 
     dayRunning = true;
     economy.runDay(db).then(refreshEconomy).catch((e) => http.log.error(e, 'Ошибка экономического дня')).finally(() => { dayRunning = false; });
   });
-  gateway = new Gateway(config, db, accounts, sessions, world, companies, economy);
+  const map = new MapService(companies);
+  gateway = new Gateway(config, db, accounts, sessions, world, companies, economy, map);
   let sweeper: NodeJS.Timeout | undefined;
 
   http.get('/health', async () => {
@@ -56,9 +59,11 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db } = {}): 
     db,
     world,
     economy,
+    map,
     async start() {
       await runMigrations(db);
       await economy.bootstrap(db);
+      await map.bootstrap(db);
       await refreshEconomy();
       await sessions.markAllActiveDisconnected(db);
       gateway.attach(http.server);

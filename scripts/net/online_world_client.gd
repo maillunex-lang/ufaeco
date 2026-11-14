@@ -52,6 +52,8 @@ const ERROR_TEXTS_RU := {
 	"company_bankrupt": "Компания обанкротилась: операции недоступны.",
 	"loan_limit_exceeded": "Превышен лимит кредита.",
 	"invalid_amount": "Неверная сумма.",
+	"lot_taken": "Участок уже занят.",
+	"lot_not_for_sale": "Этот участок не продаётся.",
 }
 
 const DISCONNECT_TEXTS_RU := {

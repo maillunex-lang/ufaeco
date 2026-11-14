@@ -50,5 +50,7 @@ export const ERROR_MESSAGES_RU: Record<string, string> = {
   company_bankrupt: 'Компания обанкротилась',
   loan_limit_exceeded: 'Превышен лимит кредита',
   invalid_amount: 'Неверная сумма',
+  lot_taken: 'Участок уже занят',
+  lot_not_for_sale: 'Участок не продаётся',
   internal_error: 'Внутренняя ошибка сервера',
 };
