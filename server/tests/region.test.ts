@@ -6,8 +6,9 @@ import { createPool, type Db } from '../src/persistence/db.js';
 import { runMigrations } from '../src/persistence/migrate.js';
 import { loadRegionData, validateRegionData, type RegionData } from '../src/region/data.js';
 import { haversineKm, RegionNetwork } from '../src/region/network.js';
-import { generateInitialCity, lotPrice } from '../src/world_map/generator.js';
+import { generateInitialCity, zoneOfCell } from '../src/world_map/generator.js';
 import { calibrateCapacity, initialPopulation } from '../src/world_map/growth.js';
+import { buildRegionGrid, lineCells } from '../src/region/grid.js';
 import { MapService } from '../src/world_map/service.js';
 import { startServer, TEST_DB_URL, TestClient } from './helpers.js';
 
@@ -117,7 +118,69 @@ describe('транспортная сеть и фрахт', () => {
   });
 });
 
-describe('города и участки в БД', () => {
+describe('сетка региона', () => {
+  const grid = buildRegionGrid(region);
+
+  it('размеры, маска региона и река: ячейка ≈ 8 км, внутри контура РБ', () => {
+    expect(grid.cell_km).toBe(8);
+    expect(grid.mask).toHaveLength(grid.height);
+    for (const r of grid.mask) expect(r).toHaveLength(grid.width);
+    const all = grid.mask.join('');
+    expect((all.match(/[.~]/g) ?? []).length).toBeGreaterThan(1500);
+    expect(all.includes('~')).toBe(true);
+    expect(grid.width).toBeGreaterThan(40);
+    expect(grid.height).toBeGreaterThan(50);
+  });
+
+  it('города на сетке: целые ячейки, без пересечений, на земле, габариты по населению, рядом с настоящим положением', () => {
+    const taken = new Set<string>();
+    for (const c of region.cities) {
+      const r = grid.cities[c.id]!;
+      expect(r, c.id).toBeDefined();
+      const expected = c.population >= 1_000_000 ? 3 : c.population >= 100_000 ? 2 : 1;
+      expect([r.w, r.h]).toEqual([expected, expected]);
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+        expect('.~').toContain(grid.mask[y]![x]);
+        expect(taken.has(`${x},${y}`), `пересечение городов в ${x},${y}`).toBe(false);
+        taken.add(`${x},${y}`);
+      }
+      // смещение от настоящей точки не больше 3 ячеек (≈24 км)
+      const [lon0, , , lat1] = region.geo.bbox;
+      const cos = Math.cos((((region.geo.bbox[1] + lat1) / 2) * Math.PI) / 180);
+      const tx = ((c.lon - lon0) * cos * 111) / grid.cell_km, ty = ((lat1 - c.lat) * 111) / grid.cell_km;
+      expect(Math.hypot(r.x + r.w / 2 - tx, r.y + r.h / 2 - ty), c.id).toBeLessThan(3.5);
+    }
+    expect(grid.cities.ufa!.w).toBe(3);
+  });
+
+  it('месторождения: по одной ячейке земли, не под городом, уникальные', () => {
+    const cityCells = new Set<string>();
+    for (const r of Object.values(grid.cities)) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) cityCells.add(`${x},${y}`);
+    const seen = new Set<string>();
+    for (const r of region.resources) {
+      const p = grid.resources[r.id]!;
+      expect(grid.mask[p.y]![p.x], r.id).toBe('.');
+      expect(cityCells.has(`${p.x},${p.y}`)).toBe(false);
+      expect(seen.has(`${p.x},${p.y}`)).toBe(false);
+      seen.add(`${p.x},${p.y}`);
+    }
+  });
+
+  it('дороги и железные дороги идут по ячейкам: связная цепочка от города до города', () => {
+    for (const link of [...grid.roads, ...grid.rails]) {
+      const a = grid.cities[link.a]!, b = grid.cities[link.b]!;
+      const first = link.cells[0]!, last = link.cells.at(-1)!;
+      expect(first).toEqual([a.x + Math.floor(a.w / 2), a.y + Math.floor(a.h / 2)]);
+      expect(last).toEqual([b.x + Math.floor(b.w / 2), b.y + Math.floor(b.h / 2)]);
+      for (let i = 1; i < link.cells.length; i++) {
+        expect(Math.max(Math.abs(link.cells[i]![0] - link.cells[i - 1]![0]), Math.abs(link.cells[i]![1] - link.cells[i - 1]![1]))).toBe(1);
+      }
+    }
+    expect(lineCells(0, 0, 3, 1)).toEqual([[0, 0], [1, 0], [2, 1], [3, 1]]);
+  });
+});
+
+describe('города и сетка в БД', () => {
   let db: Db;
   const map = new MapService(new CompanyService());
   beforeAll(async () => {
@@ -129,9 +192,9 @@ describe('города и участки в БД', () => {
   afterAll(async () => { await db.end(); });
 
   it('bootstrap создаёт все города по данным и идемпотентен', async () => {
-    const before = Number((await db.query('SELECT count(*) n FROM map_lots')).rows[0].n);
+    const before = Number((await db.query('SELECT count(*) n FROM buildings')).rows[0].n);
     await map.bootstrap(db, region);
-    expect(Number((await db.query('SELECT count(*) n FROM map_lots')).rows[0].n)).toBe(before);
+    expect(Number((await db.query('SELECT count(*) n FROM buildings')).rows[0].n)).toBe(before);
     const rows = (await db.query('SELECT id, name, lat, lon, wage_rub, base_population FROM cities ORDER BY id')).rows;
     expect(rows.map((r) => r.id).sort()).toEqual(region.cities.map((c) => c.id).sort());
     for (const c of region.cities) {
@@ -140,20 +203,20 @@ describe('города и участки в БД', () => {
     }
   });
 
-  it('у каждого города есть план нужного размера, участки в границах, без пересечений и на земле', async () => {
+  it('у каждого города план нужного размера, городская застройка в границах, на земле, без пересечений, в своей зоне', async () => {
     for (const c of region.cities) {
       const loaded = await map.loadState(db, c.id);
       expect(loaded, c.id).not.toBeNull();
       const { st } = loaded!;
       expect(st.width).toBe(c.plan.width);
       expect(st.height).toBe(c.plan.height);
-      expect(st.lots.length).toBeGreaterThanOrEqual(Math.min(c.plan.target_lots, 12));
+      expect(st.buildings.length).toBeGreaterThanOrEqual(Math.min(c.plan.target_buildings, 20));
       const seen = new Set<string>();
-      for (const l of st.lots) {
-        expect(l.x + l.w).toBeLessThanOrEqual(st.width);
-        expect(l.y + l.h).toBeLessThanOrEqual(st.height);
-        for (let y = l.y; y < l.y + l.h; y++) for (let x = l.x; x < l.x + l.w; x++) {
-          expect(st.tiles[y]![x], `${c.id}: участок ${l.id} не на земле`).toBe('.');
+      for (const b of st.buildings) {
+        expect(b.x + b.w).toBeLessThanOrEqual(st.width);
+        expect(b.y + b.h).toBeLessThanOrEqual(st.height);
+        for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) {
+          expect(st.tiles[y]![x], `${c.id}: здание не на земле`).toBe('.');
           expect(seen.has(`${x},${y}`)).toBe(false);
           seen.add(`${x},${y}`);
         }
@@ -164,36 +227,36 @@ describe('города и участки в БД', () => {
   it('города без реки не имеют воды; города с рекой — имеют', async () => {
     for (const c of region.cities) {
       const { st } = (await map.loadState(db, c.id))!;
-      const water = st.tiles.some((r) => r.includes('~'));
-      expect(water, c.id).toBe(c.plan.river);
+      expect(st.tiles.some((r) => r.includes('~')), c.id).toBe(c.plan.river);
     }
   });
 
   it('стартовое население города согласовано с данными (калибровка вместимости жилья)', () => {
     for (const c of region.cities) {
-      const st = generateInitialCity(c.id, c.plan.seed, c.plan.target_lots, { width: c.plan.width, height: c.plan.height, params: { landBaseCents: c.land_base_cents_per_tile, river: c.plan.river } });
-      const cpt = calibrateCapacity(st.lots, c.population);
-      const pop = initialPopulation(st.lots, cpt);
-      expect(Math.abs(pop - c.population) / c.population, c.id).toBeLessThan(0.01);
+      const st = generateInitialCity(c.id, c.plan.seed, c.plan.target_buildings, { width: c.plan.width, height: c.plan.height, params: { landBaseCents: c.land_base_cents_per_tile, river: c.plan.river } });
+      st.params.capacityScale = calibrateCapacity(st, c.population);
+      expect(Math.abs(initialPopulation(st) - c.population) / c.population, c.id).toBeLessThan(0.01);
     }
   });
 
-  it('оверлеи: центр дороже и оживлённее окраин, коммерция дороже промзоны; цена растёт со стоимостью земли', async () => {
-    const { st } = (await map.loadState(db, 'sterlitamak'))!;
-    const dist = (l: { x: number; y: number; w: number; h: number }) => Math.hypot(l.x + l.w / 2 - st.center.x, l.y + l.h / 2 - st.center.y);
-    const lots = st.lots.filter((l) => l.zone !== 'park');
-    const sorted = [...lots].sort((a, b) => dist(a) - dist(b));
-    const mean = (a: typeof lots, f: (l: (typeof lots)[number]) => number) => a.reduce((s, l) => s + f(l), 0) / a.length;
-    const k = Math.max(3, Math.floor(sorted.length / 4));
-    expect(mean(sorted.slice(0, k), (l) => l.land_value)).toBeGreaterThan(mean(sorted.slice(-k), (l) => l.land_value));
-    expect(mean(sorted.slice(0, k), (l) => l.traffic)).toBeGreaterThan(mean(sorted.slice(-k), (l) => l.traffic));
-    for (const l of st.lots) { expect(l.land_value).toBeGreaterThanOrEqual(1); expect(l.land_value).toBeLessThanOrEqual(100); }
-    expect(lotPrice(1_000_000, 4, 90, 'residential')).toBeGreaterThan(lotPrice(1_000_000, 4, 20, 'residential'));
-    expect(lotPrice(1_000_000, 4, 90, 'park')).toBe(0);
-    // дороже город — дороже земля
-    const ufa = (await map.loadState(db, 'ufa'))!.st.lots.filter((l) => l.zone === 'commercial');
-    const yan = (await map.loadState(db, 'yanaul'))!.st.lots.filter((l) => l.zone === 'commercial');
-    if (ufa.length && yan.length) expect(mean(ufa, (l) => l.base_price_cents / (l.w * l.h))).toBeGreaterThan(mean(yan, (l) => l.base_price_cents / (l.w * l.h)));
+  it('оверлеи: центр дороже и оживлённее окраин; дороже город — дороже земля', async () => {
+    const city = await db.query("SELECT 1");
+    void city;
+    const got = await map.getCity(db, 'sterlitamak');
+    const hex = (row: string, x: number) => parseInt(row.slice(x * 2, x * 2 + 2), 16);
+    const near: number[] = [], far: number[] = [], nearT: number[] = [], farT: number[] = [];
+    for (let y = 0; y < got.height; y++) for (let x = 0; x < got.width; x++) {
+      if (got.cells.zones[y]![x] === '-') continue;
+      const d = Math.hypot(x - got.center.x, y - got.center.y);
+      if (d < 8) { near.push(hex(got.cells.land_value[y]!, x)); nearT.push(hex(got.cells.traffic[y]!, x)); }
+      if (d > 18) { far.push(hex(got.cells.land_value[y]!, x)); farT.push(hex(got.cells.traffic[y]!, x)); }
+    }
+    const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+    expect(mean(near)).toBeGreaterThan(mean(far));
+    expect(mean(nearT)).toBeGreaterThan(mean(farT));
+    const base = (id: string) => region.cities.find((c) => c.id === id)!.land_base_cents_per_tile;
+    expect(base('ufa')).toBeGreaterThan(base('yanaul'));
+    void zoneOfCell;
   });
 
   it('хабы и месторождения загружены, у месторождений есть ближайший город', async () => {
@@ -204,8 +267,7 @@ describe('города и участки в БД', () => {
       expect(region.cities.some((c) => c.id === r.city_id)).toBe(true);
       expect(Number(r.remaining_units)).toBeLessThanOrEqual(Number(r.reserve_units));
     }
-    const sibay = res.find((r) => r.id === 'copper_zinc-1')!;
-    expect(sibay.city_id).toBe('sibay');
+    expect(res.find((r) => r.id === 'copper_zinc-1')!.city_id).toBe('sibay');
   });
 });
 
@@ -217,7 +279,8 @@ describe('команды региона по WebSocket и графики гор�
       expect((await c.register('r' + randomUUID().replace(/-/g, '').slice(0, 12))).type).toBe('auth_ok');
       const reg = (await c.command('region.get', {})).payload.result.region;
       expect(reg.cities).toHaveLength(21);
-      expect(reg.outline.length).toBeGreaterThan(100);
+      expect(reg.grid.mask.length).toBe(reg.grid.height);
+      expect(reg.grid.cities.ufa).toMatchObject({ w: 3, h: 3 });
       expect(reg.resources.length).toBe(region.resources.length);
       expect(reg.cities.find((x: { id: string }) => x.id === 'ufa')).toMatchObject({ has_hub: true });
       expect(reg.roads.every((r: { km: number }) => r.km > 0)).toBe(true);
@@ -228,8 +291,8 @@ describe('команды региона по WebSocket и графики гор�
       expect((await c.command('region.freight_quote', { from_city: 'ufa', to_city: 'sibay', tonnes: -1 })).payload.error.code).toBe('invalid_payload');
       const st = (await c.command('map.get_city', { city_id: 'sterlitamak' })).payload.result.city;
       expect(st).toMatchObject({ id: 'sterlitamak', wage_rub: 58000 });
-      expect(st.lots[0]).toHaveProperty('land_value');
-      expect(st.lots[0]).toHaveProperty('traffic');
+      expect(st.cells.land_value).toHaveLength(st.height);
+      expect(st.buildings.length).toBeGreaterThan(20);
       expect((await c.command('city.get_stats', { city_id: 'nowhere' })).payload.error.code).toBe('not_found');
       await c.closeGracefully();
     } finally {

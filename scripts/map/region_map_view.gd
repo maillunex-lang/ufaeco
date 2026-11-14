@@ -1,13 +1,12 @@
 class_name RegionMapView
 extends PanZoomNode2D
-## Схематичная карта Республики Башкортостан: контур, реки, автодороги и железные дороги, хабы, месторождения, города.
-## Данные — команда region.get (контур и реки — Natural Earth, public domain). Тап по городу/месторождению — выбор.
+## Карта Республики Башкортостан на сетке ячеек (≈ 8 км): земля и реки — ячейки, города занимают ячейки (3×3, 2×2, 1×1),
+## месторождения — по одной ячейке, дороги и железные дороги идут по ячейкам. Данные — команда region.get (поле grid).
 
 signal city_selected(city_id: String)
 signal site_selected(site: Dictionary)
 
-const KM_PX := 2.0
-const KM_PER_DEG := 111.0
+const CELL := 20.0
 
 const RESOURCE_COLORS := {
 	"oil": Color("#2b2b2b"),
@@ -24,10 +23,7 @@ var layers := {"roads": true, "rails": true, "resources": true, "hubs": true}
 var selected_city := ""
 var selected_site := ""
 
-var _lon0 := 0.0
-var _lat1 := 0.0
-var _cos := 0.588
-var _city_pos := {}
+var _grid: Dictionary = {}
 
 
 func _init() -> void:
@@ -37,31 +33,19 @@ func _init() -> void:
 	zoomed.connect(queue_redraw)
 
 
-func project(lon: float, lat: float) -> Vector2:
-	return Vector2((lon - _lon0) * _cos * KM_PER_DEG * KM_PX, (_lat1 - lat) * KM_PER_DEG * KM_PX)
-
-
 func set_region(data: Dictionary) -> void:
 	region = data
-	var bbox: Array = region["bbox"]
-	_lon0 = float(bbox[0])
-	_lat1 = float(bbox[3])
-	_cos = cos(deg_to_rad((float(bbox[1]) + float(bbox[3])) / 2.0))
-	_city_pos.clear()
-	for c in region["cities"]:
-		_city_pos[c["id"]] = project(float(c["lon"]), float(c["lat"]))
+	_grid = region["grid"]
 	queue_redraw()
 
 
-## Вписать регион в прямоугольник экрана (свободная область между панелями интерфейса).
-func fit_to_view(size: Vector2, area := Rect2(Vector2(260, 175), Vector2(640, 525))) -> void:
+func fit_to_view(_size: Vector2, area := Rect2(Vector2(260, 175), Vector2(640, 525))) -> void:
 	if region.is_empty():
 		return
-	var bbox: Array = region["bbox"]
-	var br := project(float(bbox[2]), float(bbox[1]))
-	var z := minf(area.size.x / br.x, area.size.y / br.y) * 0.97
+	var extent := Vector2(float(_grid["width"]), float(_grid["height"])) * CELL
+	var z := minf(area.size.x / extent.x, area.size.y / extent.y) * 0.97
 	scale = Vector2(z, z)
-	position = area.position + (area.size - br * z) / 2.0
+	position = area.position + (area.size - extent * z) / 2.0
 
 
 func city(id: String) -> Dictionary:
@@ -71,8 +55,20 @@ func city(id: String) -> Dictionary:
 	return {}
 
 
+## Прямоугольник города в ячейках: {x, y, w, h}.
+func city_rect(id: String) -> Rect2:
+	var r: Dictionary = _grid["cities"][id]
+	return Rect2(float(r["x"]), float(r["y"]), float(r["w"]), float(r["h"]))
+
+
 func city_screen_pos(id: String) -> Vector2:
-	return position + (_city_pos[id] as Vector2) * scale.x
+	var r := city_rect(id)
+	return position + (r.position + r.size / 2.0) * CELL * scale.x
+
+
+func resource_screen_pos(id: String) -> Vector2:
+	var p: Dictionary = _grid["resources"][id]
+	return position + (Vector2(float(p["x"]), float(p["y"])) + Vector2(0.5, 0.5)) * CELL * scale.x
 
 
 func set_layer(name: String, on: bool) -> void:
@@ -80,64 +76,89 @@ func set_layer(name: String, on: bool) -> void:
 	queue_redraw()
 
 
+func _center(id: String) -> Vector2:
+	var r := city_rect(id)
+	return (Vector2(floorf(r.position.x + floorf(r.size.x / 2.0)), floorf(r.position.y + floorf(r.size.y / 2.0))) + Vector2(0.5, 0.5)) * CELL
+
+
+func _link_points(link: Dictionary) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for c in link["cells"]:
+		pts.append((Vector2(float(c[0]), float(c[1])) + Vector2(0.5, 0.5)) * CELL)
+	return pts
+
+
 func _draw() -> void:
 	if region.is_empty():
 		return
-	var outline := PackedVector2Array()
-	for p in region["outline"]:
-		outline.append(project(float(p[0]), float(p[1])))
-	draw_colored_polygon(outline, BashPalette.MINT.lerp(BashPalette.CREAM, 0.45))
-	var closed := outline.duplicate()
-	closed.append(outline[0])
-	draw_polyline(closed, BashPalette.GREEN_DEEP, 4.0)
-	for r in region["rivers"]:
-		var pts := PackedVector2Array()
-		for p in r["points"]:
-			pts.append(project(float(p[0]), float(p[1])))
-		draw_polyline(pts, BashPalette.TEAL, 5.0)
+	var mask: Array = _grid["mask"]
+	var w := int(_grid["width"])
+	var h := int(_grid["height"])
+	var land := BashPalette.MINT.lerp(BashPalette.CREAM, 0.45)
+	var edge := Color(BashPalette.GREEN_DEEP, 0.18)
+	for y in range(h):
+		var row := String(mask[y])
+		for x in range(w):
+			var ch := row[x]
+			if ch == " ":
+				continue
+			var r := Rect2(Vector2(x, y) * CELL, Vector2(CELL, CELL))
+			draw_rect(r, BashPalette.TEAL if ch == "~" else land)
+			draw_rect(r, edge, false, 1.0)
 	if layers["roads"]:
-		for e in region["roads"]:
-			draw_line(_city_pos[e["a"]], _city_pos[e["b"]], Color(0.55, 0.6, 0.62, 0.9), 3.0)
+		for link in _grid["roads"]:
+			draw_polyline(_link_points(link), Color(0.5, 0.55, 0.58, 0.95), 4.0)
 	if layers["rails"]:
-		for e in region["rails"]:
-			draw_dashed_line(_city_pos[e["a"]], _city_pos[e["b"]], BashPalette.TEAL_DEEP, 3.0, 10.0)
+		var pts_all: Array = []
+		for link in _grid["rails"]:
+			pts_all.append(_link_points(link))
+		for pts in pts_all:
+			for i in range(pts.size() - 1):
+				draw_dashed_line(pts[i], pts[i + 1], BashPalette.TEAL_DEEP, 4.0, 8.0)
 	var inv := 1.0 / scale.x
 	if layers["resources"]:
 		for r in region["resources"]:
-			var p := project(float(r["lon"]), float(r["lat"]))
-			var col: Color = RESOURCE_COLORS.get(r["resource"], Color.GRAY)
-			draw_circle(p, 8.0 * minf(inv, 2.0), col)
-			draw_arc(p, 8.0 * minf(inv, 2.0), 0.0, TAU, 20, Color.WHITE, 2.0)
+			var cell: Dictionary = r["cell"]
+			var rect := Rect2(Vector2(float(cell["x"]), float(cell["y"])) * CELL + Vector2(3, 3), Vector2(CELL - 6, CELL - 6))
+			draw_rect(rect, RESOURCE_COLORS.get(r["resource"], Color.GRAY))
+			draw_rect(rect, Color.WHITE, false, 2.0)
 			if r["id"] == selected_site:
-				draw_arc(p, 14.0 * minf(inv, 2.0), 0.0, TAU, 24, BashPalette.GOLD, 4.0)
+				draw_rect(rect.grow(4.0), BashPalette.GOLD, false, 4.0)
 	var font := ThemeDB.fallback_font
 	var fs := clampi(int(17.0 * inv), 14, 44)
 	for c in region["cities"]:
-		var p: Vector2 = _city_pos[c["id"]]
-		var rad := (7.0 + sqrt(float(c["population"]) / 1000.0) * 0.85) * minf(inv, 1.6)
+		var rc := city_rect(c["id"])
+		var rect := Rect2(rc.position * CELL, rc.size * CELL).grow(-1.0)
 		if layers["hubs"] and c.get("has_hub", false):
-			var s := rad + 4.0 * minf(inv, 1.6)
-			draw_rect(Rect2(p - Vector2(s, s), Vector2(s, s) * 2.0), BashPalette.GOLD_SOFT)
-			draw_rect(Rect2(p - Vector2(s, s), Vector2(s, s) * 2.0), BashPalette.GOLD, false, 3.0)
-		draw_circle(p, rad, BashPalette.CREAM)
-		draw_arc(p, rad, 0.0, TAU, 28, BashPalette.TEAL_DEEP, 3.0)
+			draw_rect(rect.grow(4.0), BashPalette.GOLD, false, 5.0)
+		draw_rect(rect, BashPalette.CREAM)
+		draw_rect(rect, BashPalette.TEAL_DEEP, false, 3.0)
+		# «дома» внутри ячеек города: по клетке на ячейку
+		for dy in range(int(rc.size.y)):
+			for dx in range(int(rc.size.x)):
+				var cr := Rect2((rc.position + Vector2(dx, dy)) * CELL + Vector2(5, 5), Vector2(CELL - 10, CELL - 10))
+				draw_rect(cr, BashPalette.TEAL.lerp(BashPalette.CREAM, 0.35))
 		if c["id"] == selected_city:
-			draw_arc(p, rad + 7.0 * minf(inv, 1.6), 0.0, TAU, 28, BashPalette.GOLD, 5.0)
-		draw_string(font, p + Vector2(rad + 6.0, fs * 0.35), str(c["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, BashPalette.TEAL_DEEP)
+			draw_rect(rect.grow(7.0), BashPalette.GOLD, false, 5.0)
+		draw_string(font, Vector2(rect.end.x + 6.0, rect.position.y + rect.size.y / 2.0 + fs * 0.35), str(c["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, BashPalette.TEAL_DEEP)
 
 
 func _on_tap(screen_pos: Vector2) -> void:
 	if region.is_empty():
 		return
 	var local := to_map(screen_pos)
-	var tol := 26.0 / scale.x
+	var cx := floori(local.x / CELL)
+	var cy := floori(local.y / CELL)
+	# город: клик по любой ячейке его габарита (с допуском в одну ячейку вокруг)
 	var best := ""
-	var best_d := tol
-	for id in _city_pos:
-		var d := local.distance_to(_city_pos[id])
-		if d < best_d:
-			best_d = d
-			best = id
+	var best_d := 1e9
+	for c in region["cities"]:
+		var rc := city_rect(c["id"]).grow(1.0)
+		if rc.has_point(Vector2(float(cx) + 0.5, float(cy) + 0.5)):
+			var d := (city_rect(c["id"]).get_center() - Vector2(float(cx) + 0.5, float(cy) + 0.5)).length()
+			if d < best_d:
+				best_d = d
+				best = c["id"]
 	if best != "":
 		selected_city = best
 		selected_site = ""
@@ -145,19 +166,14 @@ func _on_tap(screen_pos: Vector2) -> void:
 		city_selected.emit(best)
 		return
 	if layers["resources"]:
-		var site := {}
-		var sd := 18.0 / scale.x
 		for r in region["resources"]:
-			var d := local.distance_to(project(float(r["lon"]), float(r["lat"])))
-			if d < sd:
-				sd = d
-				site = r
-		if not site.is_empty():
-			selected_site = site["id"]
-			selected_city = ""
-			queue_redraw()
-			site_selected.emit(site)
-			return
+			var cell: Dictionary = r["cell"]
+			if int(cell["x"]) == cx and int(cell["y"]) == cy:
+				selected_site = r["id"]
+				selected_city = ""
+				queue_redraw()
+				site_selected.emit(r)
+				return
 	selected_city = ""
 	selected_site = ""
 	queue_redraw()

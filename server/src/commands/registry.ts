@@ -62,22 +62,20 @@ export const commandHandlers: Record<CommandName, Handler> = {
     return { company_id: company.id, entries: await services.companies.journal(tx, company.id, args.limit ?? 50) };
   },
 
-  'enterprise.create': async ({ tx, playerId, services }, args) => {
-    const cost_cents = ENTERPRISE_KINDS[args.kind as keyof typeof ENTERPRISE_KINDS];
-    if (args.lot_id) {
-      const r = await services.map.construct(tx, playerId, args.company_id, args.lot_id, args.kind, args.name);
-      return { enterprise: r.enterprise, cost_cents };
-    }
-    return { enterprise: await services.companies.createEnterprise(tx, playerId, args.company_id, args.kind, args.name), cost_cents };
-  },
-
   'catalog.get': async () => ({ ...catalogView() }),
 
   'map.get_city': async ({ tx, services }, args) => ({ city: await services.map.getCity(tx, args.city_id) }),
 
-  'map.buy_lot': async ({ tx, playerId, services }, args) => ({
-    purchase: await services.map.buyLot(tx, playerId, args.company_id, args.lot_id),
+  'map.buy_cells': async ({ tx, playerId, services }, args) => ({
+    purchase: await services.map.buyCells(tx, playerId, args.company_id, args.city_id, { x: args.x, y: args.y, w: args.w, h: args.h }),
   }),
+
+  'building.place': async ({ tx, playerId, services }, args) => ({
+    ...(await services.map.placeBuilding(tx, playerId, args.company_id, args.city_id, args.x, args.y, args.kind, args.rotated ?? false, args.name)),
+    cost_cents: ENTERPRISE_KINDS[args.kind as keyof typeof ENTERPRISE_KINDS],
+  }),
+
+  'building.demolish': async ({ tx, playerId, services }, args) => ({ demolished: await services.map.demolish(tx, playerId, args.building_id) }),
 
   'region.get': async ({ tx, services }) => ({ region: await services.region.getRegion(tx) }),
 

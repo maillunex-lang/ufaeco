@@ -26,13 +26,14 @@
     "company.list",
     "company.get",
     "company.journal",
-    "enterprise.create",
     "map.get_city",
-    "map.buy_lot",
     "catalog.get",
     "region.get",
     "region.freight_quote",
-    "city.get_stats"
+    "city.get_stats",
+    "building.place",
+    "building.demolish",
+    "map.buy_cells"
   ],
   "error_codes": [
     "invalid_message",
@@ -62,11 +63,12 @@
     "unknown_product",
     "insufficient_inventory",
     "company_bankrupt",
-    "lot_taken",
-    "lot_not_for_sale",
-    "lot_not_owned",
-    "lot_occupied",
-    "zoning_violation"
+    "zoning_violation",
+    "cell_not_for_sale",
+    "cell_occupied",
+    "cell_taken",
+    "cells_not_owned",
+    "out_of_bounds"
   ],
   "disconnect_reasons": [
     "client_closing",

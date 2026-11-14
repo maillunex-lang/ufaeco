@@ -6,7 +6,7 @@ import { CompanyService } from '../src/companies/index.js';
 import { ENTERPRISE_KINDS, STARTING_CAPITAL_CENTS } from '../src/companies/catalog.js';
 import { withTransaction } from '../src/persistence/db.js';
 import { commandArgSchemas } from '../src/protocol/schemas.js';
-import { startServer, TestClient } from './helpers.js';
+import { buildOnFreshLand, findFreeRect, startServer, TestClient } from './helpers.js';
 
 let ctx: Awaited<ReturnType<typeof startServer>>;
 const opened: TestClient[] = [];
@@ -168,7 +168,7 @@ describe('права владельца', () => {
     for (const [name, args] of [
       ['company.get', { company_id: id }],
       ['company.journal', { company_id: id }],
-      ['enterprise.create', { company_id: id, kind: 'shop', name: 'Чужой магазин' }],
+      ['building.place', { company_id: id, city_id: 'ufa', x: 10, y: 10, kind: 'shop', name: 'Чужой магазин' }],
     ] as const) {
       const r = await b.c.command(name, args);
       expect(r.payload.ok, name).toBe(false);
@@ -192,54 +192,76 @@ describe('права владельца', () => {
   });
 });
 
-describe('предприятия и баланс', () => {
-  it('создание предприятия списывает стоимость и пишется в журнал', async () => {
+const credit = (companyId: string, cents: number) => withTransaction(db(), (tx) => new CompanyService().credit(tx, companyId, cents, 'test_grant', null, {}));
+const balanceOf = async (id: string) => Number((await db().query('SELECT balance_cents FROM companies WHERE id = $1', [id])).rows[0].balance_cents);
+
+describe('здания и баланс', () => {
+  it('постройка списывает землю и стоимость здания; всё пишется в журнал; здание видно в компании', async () => {
     const { c } = await player();
     const id = await company(c);
-    const r = await c.command('enterprise.create', { company_id: id, kind: 'farm', name: 'Поле №1' });
-    expect(r.payload.ok).toBe(true);
-    expect(r.payload.result.enterprise.balance_cents).toBe(STARTING_CAPITAL_CENTS - ENTERPRISE_KINDS.farm);
+    await credit(id, 5_000_000_000);
+    const before = await balanceOf(id);
+    const r = await buildOnFreshLand(c, db(), id, 'farm', 'Поле №1');
+    expect(r.bought.payload.ok).toBe(true);
+    expect(r.placed.payload.ok).toBe(true);
+    const land = r.bought.payload.result.purchase.price_cents as number;
+    expect(await balanceOf(id)).toBe(before - land - ENTERPRISE_KINDS.farm);
+    expect(r.placed.payload.result.enterprise.balance_cents).toBe(before - land - ENTERPRISE_KINDS.farm);
     const got = await c.command('company.get', { company_id: id });
-    expect(got.payload.result.enterprises).toEqual([expect.objectContaining({ kind: 'farm', name: 'Поле №1' })]);
-    expect(got.payload.result.company.balance_cents).toBe(STARTING_CAPITAL_CENTS - ENTERPRISE_KINDS.farm);
-    const j = await c.command('company.journal', { company_id: id });
-    expect(j.payload.result.entries[0]).toMatchObject({ amount_cents: -ENTERPRISE_KINDS.farm, reason: 'enterprise_created' });
+    expect(got.payload.result.enterprises).toEqual([expect.objectContaining({ kind: 'farm', name: 'Поле №1', city_id: 'ufa', x: r.spot.x, y: r.spot.y })]);
+    const j = (await c.command('company.journal', { company_id: id })).payload.result.entries;
+    expect(j.map((e: { reason: string }) => e.reason).slice(0, 2)).toEqual(['enterprise_created', 'land_purchase']);
+    expect(j[0]).toMatchObject({ amount_cents: -ENTERPRISE_KINDS.farm });
   });
 
-  it('недостаточно средств: предприятие не создаётся, request_id не тратится', async () => {
-    const { c, playerId } = await player();
-    const id = await company(c);
-    for (let i = 0; i < 3; i++) expect((await c.command('enterprise.create', { company_id: id, kind: 'farm', name: `Ферма ${i}` })).payload.ok).toBe(true);
-    const rid = randomUUID();
-    const bad = await c.command('enterprise.create', { company_id: id, kind: 'farm', name: 'Ферма 4' }, rid);
-    expect(bad.payload.error.code).toBe('insufficient_funds');
-    expect(Number((await db().query('SELECT count(*) n FROM enterprises WHERE company_id = $1', [id])).rows[0].n)).toBe(3);
-    expect(Number((await db().query('SELECT count(*) n FROM idempotency_requests WHERE request_id = $1', [rid])).rows[0].n)).toBe(0);
-    expect(Number((await db().query('SELECT balance_cents FROM companies WHERE id = $1', [id])).rows[0].balance_cents)).toBe(STARTING_CAPITAL_CENTS - 3 * ENTERPRISE_KINDS.farm);
-    void playerId;
-  });
-
-  it('параллельные траты не уводят баланс в минус; журнал сходится с балансом', async () => {
+  it('недостаточно средств: здание не создаётся, request_id не тратится', async () => {
     const { c } = await player();
     const id = await company(c);
-    const ids = Array.from({ length: 6 }, (_, i) => randomUUID());
-    ids.forEach((rid, i) => c.send('command', { name: 'enterprise.create', args: { company_id: id, kind: 'farm', name: `Параллельная ${i}` } }, { request_id: rid }));
+    await credit(id, 5_000_000_000);
+    const spot = (await findFreeRect(db(), 'ufa', 2, 1, ['commercial', 'residential']))!;
+    expect((await c.command('map.buy_cells', { company_id: id, city_id: 'ufa', ...spot, w: 2, h: 1 })).payload.ok).toBe(true);
+    const left = await balanceOf(id);
+    await withTransaction(db(), (tx) => new CompanyService().debit(tx, id, left - 1000, 'test_drain', null, {}).then(() => undefined));
+    const rid = randomUUID();
+    const bad = await c.command('building.place', { company_id: id, city_id: 'ufa', ...spot, kind: 'shop', name: 'Магазин' }, rid);
+    expect(bad.payload.error.code).toBe('insufficient_funds');
+    expect(Number((await db().query('SELECT count(*) n FROM enterprises WHERE company_id = $1', [id])).rows[0].n)).toBe(0);
+    expect(Number((await db().query('SELECT count(*) n FROM idempotency_requests WHERE request_id = $1', [rid])).rows[0].n)).toBe(0);
+  });
+
+  it('параллельные постройки не уводят баланс в минус; журнал сходится с балансом', async () => {
+    const { c } = await player();
+    const id = await company(c);
+    await credit(id, 5_000_000_000);
+    const spots: { x: number; y: number }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const s = (await findFreeRect(db(), 'ufa', 2, 1, ['commercial', 'residential']))!;
+      expect((await c.command('map.buy_cells', { company_id: id, city_id: 'ufa', ...s, w: 2, h: 1 })).payload.ok).toBe(true);
+      spots.push(s);
+    }
+    const left = await balanceOf(id);
+    await withTransaction(db(), (tx) => new CompanyService().debit(tx, id, left - 3 * ENTERPRISE_KINDS.shop, 'test_drain', null, {}).then(() => undefined));
+    const ids = spots.map(() => randomUUID());
+    ids.forEach((rid, i) => c.send('command', { name: 'building.place', args: { company_id: id, city_id: 'ufa', ...spots[i], kind: 'shop', name: `Параллельный ${i}` } }, { request_id: rid }));
     await c.waitFor(() => ids.every((rid) => c.messages.some((x) => x.request_id === rid && x.type === 'command_result')));
     const results = ids.map((rid) => c.messages.find((x) => x.request_id === rid && x.type === 'command_result')!);
     expect(results.filter((r) => r.payload.ok)).toHaveLength(3);
     expect(results.filter((r) => !r.payload.ok).every((r) => r.payload.error.code === 'insufficient_funds')).toBe(true);
-    const bal = Number((await db().query('SELECT balance_cents FROM companies WHERE id = $1', [id])).rows[0].balance_cents);
+    const bal = await balanceOf(id);
     const sum = Number((await db().query('SELECT sum(amount_cents) s FROM ledger_entries WHERE company_id = $1', [id])).rows[0].s);
-    expect(bal).toBe(STARTING_CAPITAL_CENTS - 3 * ENTERPRISE_KINDS.farm);
+    expect(bal).toBe(0);
     expect(sum).toBe(bal);
   });
 
   it('уникальное имя предприятия внутри компании и неизвестный вид', async () => {
     const { c } = await player();
     const id = await company(c);
-    await c.command('enterprise.create', { company_id: id, kind: 'shop', name: 'Магазин' });
-    expect((await c.command('enterprise.create', { company_id: id, kind: 'shop', name: 'магазин' })).payload.error.code).toBe('enterprise_name_taken');
-    expect((await c.command('enterprise.create', { company_id: id, kind: 'rocket', name: 'Ракета' })).payload.error.code).toBe('invalid_payload');
+    await credit(id, 5_000_000_000);
+    const a = await buildOnFreshLand(c, db(), id, 'shop', 'Магазин');
+    expect(a.placed.payload.ok).toBe(true);
+    const b = await buildOnFreshLand(c, db(), id, 'shop', 'магазин');
+    expect(b.placed.payload.error.code).toBe('enterprise_name_taken');
+    expect((await c.command('building.place', { company_id: id, city_id: 'ufa', x: 5, y: 5, kind: 'rocket', name: 'Ракета' })).payload.error.code).toBe('invalid_payload');
   });
 });
 

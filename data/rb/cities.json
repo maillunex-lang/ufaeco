@@ -20,9 +20,9 @@
    "plan": {
     "width": 84,
     "height": 64,
-    "target_lots": 140,
     "river": true,
-    "seed": 20241114
+    "seed": 20241114,
+    "target_buildings": 700
    }
   },
   {
@@ -42,9 +42,9 @@
    "plan": {
     "width": 64,
     "height": 48,
-    "target_lots": 80,
     "river": true,
-    "seed": 1101
+    "seed": 1101,
+    "target_buildings": 400
    }
   },
   {
@@ -63,9 +63,9 @@
    "plan": {
     "width": 56,
     "height": 44,
-    "target_lots": 60,
     "river": true,
-    "seed": 1102
+    "seed": 1102,
+    "target_buildings": 300
    }
   },
   {
@@ -85,9 +85,9 @@
    "plan": {
     "width": 56,
     "height": 44,
-    "target_lots": 55,
     "river": true,
-    "seed": 1103
+    "seed": 1103,
+    "target_buildings": 275
    }
   },
   {
@@ -106,9 +106,9 @@
    "plan": {
     "width": 52,
     "height": 40,
-    "target_lots": 50,
     "river": false,
-    "seed": 1104
+    "seed": 1104,
+    "target_buildings": 250
    }
   },
   {
@@ -127,9 +127,9 @@
    "plan": {
     "width": 44,
     "height": 34,
-    "target_lots": 32,
     "river": true,
-    "seed": 1105
+    "seed": 1105,
+    "target_buildings": 160
    }
   },
   {
@@ -149,9 +149,9 @@
    "plan": {
     "width": 44,
     "height": 34,
-    "target_lots": 32,
     "river": true,
-    "seed": 1106
+    "seed": 1106,
+    "target_buildings": 160
    }
   },
   {
@@ -171,9 +171,9 @@
    "plan": {
     "width": 44,
     "height": 34,
-    "target_lots": 32,
     "river": false,
-    "seed": 1107
+    "seed": 1107,
+    "target_buildings": 160
    }
   },
   {
@@ -192,9 +192,9 @@
    "plan": {
     "width": 44,
     "height": 34,
-    "target_lots": 30,
     "river": false,
-    "seed": 1108
+    "seed": 1108,
+    "target_buildings": 150
    }
   },
   {
@@ -214,9 +214,9 @@
    "plan": {
     "width": 44,
     "height": 34,
-    "target_lots": 34,
     "river": false,
-    "seed": 1109
+    "seed": 1109,
+    "target_buildings": 170
    }
   },
   {
@@ -236,9 +236,9 @@
    "plan": {
     "width": 44,
     "height": 34,
-    "target_lots": 30,
     "river": true,
-    "seed": 1110
+    "seed": 1110,
+    "target_buildings": 150
    }
   },
   {
@@ -258,9 +258,9 @@
    "plan": {
     "width": 44,
     "height": 34,
-    "target_lots": 30,
     "river": false,
-    "seed": 1111
+    "seed": 1111,
+    "target_buildings": 150
    }
   },
   {
@@ -280,9 +280,9 @@
    "plan": {
     "width": 40,
     "height": 32,
-    "target_lots": 26,
     "river": true,
-    "seed": 1112
+    "seed": 1112,
+    "target_buildings": 130
    }
   },
   {
@@ -301,9 +301,9 @@
    "plan": {
     "width": 40,
     "height": 32,
-    "target_lots": 24,
     "river": false,
-    "seed": 1113
+    "seed": 1113,
+    "target_buildings": 120
    }
   },
   {
@@ -322,9 +322,9 @@
    "plan": {
     "width": 40,
     "height": 32,
-    "target_lots": 24,
     "river": true,
-    "seed": 1114
+    "seed": 1114,
+    "target_buildings": 120
    }
   },
   {
@@ -343,9 +343,9 @@
    "plan": {
     "width": 40,
     "height": 32,
-    "target_lots": 22,
     "river": false,
-    "seed": 1115
+    "seed": 1115,
+    "target_buildings": 110
    }
   },
   {
@@ -365,9 +365,9 @@
    "plan": {
     "width": 36,
     "height": 28,
-    "target_lots": 20,
     "river": false,
-    "seed": 1116
+    "seed": 1116,
+    "target_buildings": 100
    }
   },
   {
@@ -387,9 +387,9 @@
    "plan": {
     "width": 36,
     "height": 28,
-    "target_lots": 18,
     "river": false,
-    "seed": 1117
+    "seed": 1117,
+    "target_buildings": 90
    }
   },
   {
@@ -408,9 +408,9 @@
    "plan": {
     "width": 36,
     "height": 28,
-    "target_lots": 16,
     "river": true,
-    "seed": 1118
+    "seed": 1118,
+    "target_buildings": 80
    }
   },
   {
@@ -429,9 +429,9 @@
    "plan": {
     "width": 36,
     "height": 28,
-    "target_lots": 14,
     "river": false,
-    "seed": 1119
+    "seed": 1119,
+    "target_buildings": 70
    }
   },
   {
@@ -451,9 +451,9 @@
    "plan": {
     "width": 36,
     "height": 28,
-    "target_lots": 14,
     "river": false,
-    "seed": 1120
+    "seed": 1120,
+    "target_buildings": 70
    }
   }
  ]

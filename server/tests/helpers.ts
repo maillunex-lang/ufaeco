@@ -3,6 +3,11 @@ import { WebSocket } from 'ws';
 import { createGameServer, type GameServer } from '../src/app.js';
 import { loadConfig, type ServerConfig } from '../src/config.js';
 import { serverMessageSchema } from '../src/protocol/schemas.js';
+import { CompanyService } from '../src/companies/index.js';
+import { ENTERPRISE_FOOTPRINT, ENTERPRISE_ZONES, type EnterpriseKind } from '../src/companies/catalog.js';
+import type { Db } from '../src/persistence/db.js';
+import { Occupancy, roadDistance, zoneOfCell } from '../src/world_map/generator.js';
+import { MapService } from '../src/world_map/service.js';
 
 export const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://basheco:basheco_dev_only@127.0.0.1:5432/basheco_test';
@@ -148,4 +153,43 @@ export class TestClient {
       await this.waitClose().catch(() => undefined);
     }
   }
+}
+
+
+/** Свободный прямоугольник клеток w×h в городе: земля у дорог, не парк, без зданий и владельцев, нужных зон. Для тестов. */
+export async function findFreeRect(
+  db: Db, cityId: string, w: number, h: number, zones: readonly string[] = ['residential', 'commercial', 'industrial'], skip = 0,
+): Promise<{ x: number; y: number } | null> {
+  const map = new MapService(new CompanyService());
+  const loaded = await map.loadState(db, cityId);
+  if (!loaded) return null;
+  const { st } = loaded;
+  const occ = new Occupancy(st);
+  const dist = roadDistance(st);
+  const ok = (x: number, y: number) =>
+    st.tiles[y]?.[x] === '.' && dist[y * st.width + x]! <= 4 && occ.claim[y * st.width + x] === 0 && zones.includes(zoneOfCell(st, x, y));
+  let seen = 0;
+  for (let y = 0; y + h <= st.height; y++) {
+    for (let x = 0; x + w <= st.width; x++) {
+      let all = true;
+      for (let yy = y; yy < y + h && all; yy++) for (let xx = x; xx < x + w; xx++) if (!ok(xx, yy)) { all = false; break; }
+      if (all && seen++ >= skip) return { x, y };
+    }
+  }
+  return null;
+}
+
+/** Купить землю под здание нужного вида и построить его через WebSocket-команды. Возвращает результаты и координаты. */
+export async function buildOnFreshLand(
+  c: TestClient, db: Db, companyId: string, kind: EnterpriseKind, name: string, opts: { city?: string; rotated?: boolean; skip?: number } = {},
+) {
+  const city = opts.city ?? 'ufa';
+  const fp = ENTERPRISE_FOOTPRINT[kind];
+  const w = opts.rotated ? fp.h : fp.w, h = opts.rotated ? fp.w : fp.h;
+  const spot = await findFreeRect(db, city, w, h, ENTERPRISE_ZONES[kind], opts.skip ?? 0);
+  if (!spot) throw new Error(`Нет места ${w}×${h} в городе ${city} под ${kind}`);
+  const bought = await c.command('map.buy_cells', { company_id: companyId, city_id: city, ...spot, w, h });
+  if (!bought.payload.ok) return { spot, bought, placed: null as unknown as Msg };
+  const placed = await c.command('building.place', { company_id: companyId, city_id: city, ...spot, kind, rotated: !!opts.rotated, name });
+  return { spot, bought, placed };
 }

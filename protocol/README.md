@@ -79,13 +79,14 @@
 | `company.list` | `{}` | `companies` (только свои) |
 | `company.get` | `{ company_id }` | `company, inventory, enterprises` (только владелец) |
 | `company.journal` | `{ company_id, limit?: 1..100 }` | `entries` (новые первыми) |
-| `enterprise.create` | `{ company_id, kind, name, lot_id? }` | `enterprise`; с `lot_id` — постройка на своём участке (зонирование, один объект на участок), без — устаревший режим без привязки к карте |
-| `region.get` | `{}` | `region`: контур и реки, `cities` (динамическое население), `roads`/`rails` с длинами, `hubs`, `resources` (запасы, владелец) |
+| `region.get` | `{}` | `region`: сетка `grid` (ячейки ≈ 8 км: `mask` строки '.'/'~'/' ', `cities` {x,y,w,h}, `resources` {x,y}, `roads`/`rails` — цепочки ячеек), `cities` (динамическое население, ячейка), `roads`/`rails` с длинами, `hubs`, `resources` (запасы, владелец) |
 | `region.freight_quote` | `{ from_city, to_city, tonnes? }` | `quote`: авто и ж/д (км, путь, ₽ за тонну), лучший способ, итог |
 | `city.get_stats` | `{ city_id, months?: 1..60 }` | `stats`: население, зарплата и помесячная история (графики) |
-| `catalog.get` | `{}` | `enterprise_kinds`: вид, стоимость, допустимые зоны |
-| `map.get_city` | `{ city_id }` | `city`: `width, height, center, tiles[], population, housing_cap, jobs, growth_day, lots[]` — участок: `id, x, y, w, h, zone, development (0..3), for_sale, price_cents, владелец, building` |
-| `map.buy_lot` | `{ company_id, lot_id }` | `purchase` (цена задана сервером; парки и занятые участки не продаются) |
+| `catalog.get` | `{}` | `enterprise_kinds`: вид, стоимость, допустимые зоны, габариты `footprint` {w, h} |
+| `map.get_city` | `{ city_id }` | `city`: `width, height, center, tiles[]` (`.` земля, `#` дорога, `~` вода, `=` мост), `cells` (строки по клеткам: `zones` r/c/i/p, `buyable` 0/1, `land_value` и `traffic` — по 2 hex-цифры на клетку), `land_base_cents`, `price_factor`, `buildings[]` (id, x, y, w, h, kind, floors, rotated, name, владелец, `city_owned`), `parcels` (`owners[]`, `runs[]` = [y, x0, длина, индекс владельца]), население и показатели |
+| `map.buy_cells` | `{ company_id, city_id, x, y, w, h }` | `purchase`: купленный прямоугольник клеток; цена считается сервером по клеткам |
+| `building.place` | `{ company_id, city_id, x, y, kind, rotated?, name }` | `building`, `enterprise`; габариты из каталога (с поворотом), клетки должны быть вашими и свободными, зона подходит виду |
+| `building.demolish` | `{ building_id }` | снос своего здания; клетки остаются в собственности |
 
 Операции над банкротом отклоняются кодом `company_bankrupt`.
 

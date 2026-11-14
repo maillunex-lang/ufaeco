@@ -35,14 +35,16 @@ func _initialize() -> void:
 	var before: Vector2 = mv.position
 	_check(before != p0, "перетаскивание сдвигает карту")
 	# тап по участку
-	var target: Dictionary = {}
+	# выбрать клетку, ближайшую к точке (560, 380)
+	var target := Vector2i(-1, -1)
 	var best := 1e9
-	for l in mv.city["lots"]:
-		var d: float = mv.lot_screen_center(l).distance_to(Vector2(560, 380))
-		if d < best:
-			best = d
-			target = l
-	var screen: Vector2 = mv.lot_screen_center(target)
+	for y in range(int(mv.city["height"])):
+		for x in range(int(mv.city["width"])):
+			var d: float = mv.cell_screen_center(x, y).distance_to(Vector2(560, 380))
+			if d < best:
+				best = d
+				target = Vector2i(x, y)
+	var screen: Vector2 = mv.cell_screen_center(target.x, target.y)
 	var tp := InputEventMouseButton.new()
 	tp.button_index = MOUSE_BUTTON_LEFT; tp.pressed = true; tp.position = screen
 	Input.parse_input_event(tp)
@@ -50,7 +52,9 @@ func _initialize() -> void:
 	tr.button_index = MOUSE_BUTTON_LEFT; tr.pressed = false; tr.position = screen
 	Input.parse_input_event(tr)
 	await process_frame
-	_check(mv.selected_lot_id == target["id"], "тап выбирает участок %s" % target["id"])
-	_check(main.lot_title.text != "Выберите участок", "панель участка заполнена: " + main.lot_title.text)
+	_check(mv.selected == target, "тап выбирает клетку %s" % str(target))
+	_check(main.cell_title.text.begins_with("Клетка"), "панель клетки заполнена: " + main.cell_title.text)
+	var gp: Vector2i = mv.grid_at(screen)
+	_check(gp == target, "обратная проекция совпадает с клеткой")
 	print("ИТОГО: %s" % ("УСПЕХ" if _fails == 0 else "ПРОВАЛ"))
 	quit(0 if _fails == 0 else 1)

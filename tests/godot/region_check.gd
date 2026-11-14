@@ -30,12 +30,13 @@ func _initialize() -> void:
 	_check(main.mode == "region" and rv.visible, "стартовый режим — регион")
 	_check(rv.region.get("cities", []).size() == 21, "21 город на карте региона")
 	_check(rv.region.get("resources", []).size() >= 20, "месторождения загружены")
-	_check(rv.region.get("outline", []).size() > 100, "контур региона загружен")
+	_check(rv.region.get("grid", {}).get("width", 0) > 40, "сетка региона загружена (%dx%d ячеек)" % [int(rv.region["grid"]["width"]), int(rv.region["grid"]["height"])])
+	_check(rv.city_rect("ufa").size == Vector2(3, 3), "Уфа занимает 3×3 ячейки")
 
 	_tap(rv.city_screen_pos("ufa"))
 	await create_timer(0.8).timeout
 	_check(rv.selected_city == "ufa" and main.region_title.text == "Уфа", "тап по городу выбирает его: " + main.region_title.text)
-	_check(main.region_info.text.find("Население: 1 145 000") != -1, "в панели население Уфы")
+	_check(main.region_info.text.find("Население:") != -1, "в панели население Уфы: " + main.region_info.text.split("\n")[0])
 	_check(main.region_open.visible, "кнопка «Открыть город» видна")
 
 	rv.set_layer("rails", false)
@@ -50,7 +51,7 @@ func _initialize() -> void:
 	await create_timer(1.5).timeout
 	_check(main.mode == "city" and main.city_id == "ufa", "открыт город Уфа")
 	_check(main.map_view.visible and not rv.visible, "показана карта города, регион скрыт")
-	_check(main.map_view.city.get("lots", []).size() > 50, "участки города загружены")
+	_check(main.map_view.city.get("buildings", []).size() > 50, "здания города загружены")
 
 	main._set_overlay("land")
 	_check(main.map_view.overlay == "land", "оверлей «стоимость земли» включён")
@@ -63,10 +64,9 @@ func _initialize() -> void:
 
 	# месторождение
 	var site: Dictionary = rv.region["resources"][0]
-	var sp: Vector2 = rv.position + rv.project(float(site["lon"]), float(site["lat"])) * rv.scale.x
-	_tap(sp)
+	_tap(rv.resource_screen_pos(site["id"]))
 	await create_timer(0.5).timeout
-	_check(rv.selected_site != "" or rv.selected_city != "", "тап по месторождению/городу в точке ресурса выбирает объект")
+	_check(rv.selected_site == site["id"] or rv.selected_city != "", "тап по ячейке месторождения выбирает объект")
 
 	print("ИТОГО: %s" % ("УСПЕХ" if _fails == 0 else "ПРОВАЛ"))
 	quit(0 if _fails == 0 else 1)

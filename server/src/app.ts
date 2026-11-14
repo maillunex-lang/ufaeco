@@ -47,16 +47,16 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db; now?: ()
         // Сигналы экономики — пока число предприятий на участках города (настоящие показатели появятся с этапами 7–9).
         const rows = (await ctx.tx.query<{ city_id: string; total: string; industrial: string }>(
           `SELECT l.city_id, count(*) AS total, count(*) FILTER (WHERE e.kind IN ('farm','elevator','mill','bakery')) AS industrial
-             FROM enterprises e JOIN map_lots l ON l.id = e.lot_id GROUP BY l.city_id`,
+             FROM enterprises e JOIN buildings l ON l.id = e.building_id GROUP BY l.city_id`,
         )).rows;
         const sig = new Map(rows.map((r) => [r.city_id, r]));
-        const detail: Record<string, { population: number; developed: number; new_lots: number }> = {};
+        const detail: Record<string, { population: number; added: number; floors: number }> = {};
         for (const id of await map.cityIds(ctx.tx)) {
           const s = sig.get(id);
           const step = await map.step(ctx.tx, id, ctx.tick, {
             operatingEnterprises: Number(s?.total ?? 0), industrialEnterprises: Number(s?.industrial ?? 0), retailUnitsSold: 0,
           });
-          detail[id] = { population: step.stats.population, developed: step.developed.length, new_lots: step.new_lots.length };
+          detail[id] = { population: step.stats.population, added: step.added.length, floors: step.floors.length };
         }
         return { cities: Object.keys(detail).length, detail };
       },
