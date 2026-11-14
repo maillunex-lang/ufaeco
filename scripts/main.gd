@@ -9,12 +9,17 @@ var company_name: String = ""
 var balance_cents: int = 0
 var _pending: Dictionary = {} # request_id -> Callable(payload)
 var _bootstrapped := false
+var catalog: Dictionary = {} # kind -> {cost_cents, wage_cents_per_day, recipe, zones}
+var _build_kinds: Array[String] = []
 
 @onready var status_label: Label = %Status
 @onready var error_label: Label = %NetError
 @onready var lot_title: Label = %LotTitle
 @onready var lot_info: Label = %LotInfo
 @onready var buy_button: Button = %BuyButton
+@onready var kind_option: OptionButton = %KindOption
+@onready var build_name: LineEdit = %BuildName
+@onready var build_button: Button = %BuildButton
 
 
 func _ready() -> void:
@@ -26,6 +31,8 @@ func _ready() -> void:
 	add_child(map_view)
 	map_view.lot_selected.connect(_on_lot_selected)
 	buy_button.pressed.connect(_on_buy_pressed)
+	build_button.pressed.connect(_on_build_pressed)
+	kind_option.item_selected.connect(func(_i): _update_build_button())
 	network = OnlineWorldClient.new()
 	add_child(network)
 	network.connection_state_changed.connect(_on_connection_state_changed)
@@ -57,7 +64,10 @@ func _on_connection_state_changed(state: String) -> void:
 	_refresh_status()
 	if state == "online" and not _bootstrapped:
 		_bootstrapped = true
-		_call("company.list", {}, _on_company_list)
+		_call("economy.get_catalog", {}, func(r):
+			for k in r["enterprise_kinds"]:
+				catalog[str(k["kind"])] = k
+			_call("company.list", {}, _on_company_list))
 
 
 func _on_company_list(result: Dictionary) -> void:
@@ -86,23 +96,90 @@ func _load_city(fit: bool) -> void:
 
 
 func _on_lot_selected(lot: Dictionary) -> void:
+	kind_option.visible = false
+	build_name.visible = false
+	build_button.visible = false
+	buy_button.visible = true
+	buy_button.disabled = true
 	if lot.is_empty():
 		lot_title.text = "Выберите участок"
 		lot_info.text = "Нажмите на участок карты. Перетаскивание — сдвиг, колесо или щипок — масштаб."
-		buy_button.disabled = true
 		return
 	lot_title.text = "%s • %d×%d" % [BashFormat.zone(str(lot["zone"])), int(lot["w"]), int(lot["h"])]
 	var price := int(lot["price_cents"])
 	var owner = lot.get("owner_company_id")
+	var building = lot.get("building")
 	if str(lot["zone"]) == "park":
 		lot_info.text = "Городской парк. Не продаётся."
-		buy_button.disabled = true
+	elif building != null:
+		buy_button.visible = false
+		lot_info.text = _building_text(lot, building)
+	elif owner != null and str(owner) == company_id:
+		buy_button.visible = false
+		lot_info.text = "Ваш участок %s. Построить предприятие:" % str(lot["id"])
+		_show_build_ui(lot)
 	elif owner != null:
-		lot_info.text = "Владелец: %s%s" % [str(lot.get("owner_name", "—")), " (вы)" if str(owner) == company_id else ""]
-		buy_button.disabled = true
+		lot_info.text = "Владелец: %s" % str(lot.get("owner_name", "—"))
 	else:
 		lot_info.text = "Участок %s\nЦена: %s\nПокупает: %s" % [str(lot["id"]), BashFormat.money(price), company_name]
 		buy_button.disabled = company_id == "" or price > balance_cents
+
+
+func _building_text(lot: Dictionary, building: Dictionary) -> String:
+	var k := str(building["kind"])
+	var text := "%s «%s»" % [BashFormat.kind(k), str(building["name"])]
+	var info: Dictionary = catalog.get(k, {})
+	if not info.is_empty():
+		text += "\nЗарплаты: %s в день" % BashFormat.money(int(info["wage_cents_per_day"]))
+		var r := BashFormat.recipe(info.get("recipe"))
+		if r != "":
+			text += "\nПроизводство: " + r
+	var owner = lot.get("owner_company_id")
+	text += "\nВладелец: %s%s" % [str(lot.get("owner_name", "—")), " (вы)" if owner != null and str(owner) == company_id else ""]
+	return text
+
+
+func _show_build_ui(lot: Dictionary) -> void:
+	_build_kinds.clear()
+	kind_option.clear()
+	for k in catalog:
+		if str(lot["zone"]) in catalog[k]["zones"]:
+			_build_kinds.append(k)
+			kind_option.add_item("%s — %s" % [BashFormat.kind(k), BashFormat.money(int(catalog[k]["cost_cents"]))])
+	if _build_kinds.is_empty():
+		lot_info.text += "\nВ этой зоне строить нечего."
+		return
+	build_name.text = ""
+	kind_option.visible = true
+	build_name.visible = true
+	build_button.visible = true
+	_update_build_button()
+
+
+func _update_build_button() -> void:
+	var idx := kind_option.selected
+	if idx < 0 or idx >= _build_kinds.size():
+		return
+	var k := _build_kinds[idx]
+	var cost := int(catalog[k]["cost_cents"])
+	build_button.text = "Построить за %s" % BashFormat.money(cost)
+	build_button.disabled = cost > balance_cents
+
+
+func _on_build_pressed() -> void:
+	var lot := map_view.selected_lot()
+	var idx := kind_option.selected
+	if lot.is_empty() or idx < 0 or idx >= _build_kinds.size():
+		return
+	var k := _build_kinds[idx]
+	var name_text := build_name.text.strip_edges()
+	if name_text.length() < 2:
+		name_text = "%s №%d" % [BashFormat.kind(k), randi() % 900 + 100]
+	build_button.disabled = true
+	_call("enterprise.create", {"company_id": company_id, "kind": k, "name": name_text, "lot_id": str(lot["id"])}, func(r):
+		balance_cents = int(r["enterprise"]["balance_cents"])
+		_refresh_status()
+		_load_city(false))
 
 
 func _on_buy_pressed() -> void:

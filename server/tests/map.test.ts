@@ -14,6 +14,7 @@ import { startServer, TEST_DB_URL, TestClient } from './helpers.js';
 beforeAll(async () => {
   const pool = createPool(TEST_DB_URL);
   await runMigrations(pool);
+  await pool.query('UPDATE enterprises SET lot_id = NULL WHERE lot_id IS NOT NULL');
   await pool.query('UPDATE map_lots SET owner_company_id = NULL, bought_at = NULL');
   await pool.end();
 });

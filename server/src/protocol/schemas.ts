@@ -77,7 +77,13 @@ export const commandArgSchemas = {
   'bank.repay_loan': z.strictObject({ company_id: uuid, amount_cents: z.number().int().min(1).max(1e12) }),
   'map.get_city': z.strictObject({ city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/) }),
   'map.buy_lot': z.strictObject({ company_id: uuid, lot_id: z.string().regex(/^[a-z0-9_-]{1,64}$/) }),
-  'enterprise.create': z.strictObject({ company_id: uuid, kind: z.enum(ENTERPRISE_KIND_IDS), name: companyName }),
+  'enterprise.create': z.strictObject({
+    company_id: uuid,
+    kind: z.enum(ENTERPRISE_KIND_IDS),
+    name: companyName,
+    /** Участок карты; без него предприятие создаётся без привязки к карте (устаревший режим). */
+    lot_id: z.string().regex(/^[a-z0-9_-]{1,64}$/).optional(),
+  }),
 } as const;
 export type CommandName = keyof typeof commandArgSchemas;
 

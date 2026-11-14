@@ -61,10 +61,14 @@ export const commandHandlers: Record<CommandName, Handler> = {
     return { company_id: company.id, entries: await services.companies.journal(tx, company.id, args.limit ?? 50) };
   },
 
-  'enterprise.create': async ({ tx, playerId, services }, args) => ({
-    enterprise: await services.companies.createEnterprise(tx, playerId, args.company_id, args.kind, args.name),
-    cost_cents: ENTERPRISE_KINDS[args.kind as keyof typeof ENTERPRISE_KINDS],
-  }),
+  'enterprise.create': async ({ tx, playerId, services }, args) => {
+    const cost_cents = ENTERPRISE_KINDS[args.kind as keyof typeof ENTERPRISE_KINDS];
+    if (args.lot_id) {
+      const r = await services.map.construct(tx, playerId, args.company_id, args.lot_id, args.kind, args.name);
+      return { enterprise: r.enterprise, cost_cents };
+    }
+    return { enterprise: await services.companies.createEnterprise(tx, playerId, args.company_id, args.kind, args.name), cost_cents };
+  },
 
   'economy.get_catalog': async () => ({ ...catalogView() }),
 

@@ -23,3 +23,29 @@ const ZONE_RU := {
 
 static func zone(z: String) -> String:
 	return ZONE_RU.get(z, z)
+
+const KIND_RU := {
+	"farm": "Ферма",
+	"elevator": "Элеватор",
+	"mill": "Мельница",
+	"bakery": "Пекарня",
+	"shop": "Магазин",
+	"construction_office": "Строительная контора",
+}
+
+const PRODUCT_RU := {"grain": "зерно", "flour": "мука", "bread": "хлеб", "fuel": "топливо"}
+
+static func kind(k: String) -> String:
+	return KIND_RU.get(k, k)
+
+static func goods(d: Dictionary) -> String:
+	var parts: Array[String] = []
+	for p in d:
+		parts.append("%s ×%d" % [PRODUCT_RU.get(p, p), int(d[p])])
+	return ", ".join(parts)
+
+## Рецепт предприятия одной строкой; null-рецепт → пустая строка.
+static func recipe(r) -> String:
+	if r == null:
+		return ""
+	return "%s → %s в день" % [goods(r["inputs"]), goods(r["outputs"])]

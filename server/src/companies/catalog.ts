@@ -19,3 +19,13 @@ export const ENTERPRISE_KINDS = {
 } as const;
 export type EnterpriseKind = keyof typeof ENTERPRISE_KINDS;
 export const ENTERPRISE_KIND_IDS = Object.keys(ENTERPRISE_KINDS) as [EnterpriseKind, ...EnterpriseKind[]];
+
+/** Зонирование: в каких зонах города можно строить предприятие (только при постройке на участке карты). */
+export const ENTERPRISE_ZONES: Record<EnterpriseKind, readonly string[]> = {
+  farm: ['industrial'],
+  elevator: ['industrial'],
+  mill: ['industrial'],
+  bakery: ['industrial', 'commercial'],
+  shop: ['commercial', 'residential'],
+  construction_office: ['commercial'],
+};

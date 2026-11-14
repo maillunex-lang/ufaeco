@@ -26,12 +26,23 @@ var my_company_id: String = ""
 var selected_lot_id: String = ""
 var viewport_size := Vector2(1280, 720)
 
+# Игровые здания: вид предприятия → спрайт (номер buildingTiles), оттенок и высота. Ширина ×2 — под участок 2×2, высота — tall.
+const KIND_STYLE := {
+	"shop": {"tall": 2.4, "sprite": 108, "tint": Color(1, 1, 1)},
+	"bakery": {"tall": 2.4, "sprite": 113, "tint": Color(1, 0.95, 0.85)},
+	"construction_office": {"tall": 3.0, "sprite": 123, "tint": Color(0.9, 0.95, 1)},
+	"mill": {"tall": 2.8, "sprite": 106, "tint": Color(0.85, 0.95, 1)},
+	"elevator": {"tall": 3.8, "sprite": 85, "tint": Color(1, 0.93, 0.7)},
+	"farm": {"tall": 2.0, "sprite": 27, "tint": Color(0.8, 1, 0.75)},
+}
+
 var _tex := {}
 var _bld_tex := {}
 var _offsets := {}
 var _lots_by_id := {}
 var _grid_lot := {}
-var _objects: Array = [] # [depth, gx, Texture2D, Vector2 pos]
+var _objects: Array = [] # [depth, gx, Texture2D, Vector2 pos, Vector2 scale, Color tint]
+var _labels: Array = [] # [Vector2 anchor, String text]
 var _dragging := false
 var _moved := 0.0
 var _touches := {}
@@ -43,6 +54,10 @@ func _init() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	for n in ["ground_grass", "water", "road_ew", "road_ns", "road_cross", "bridge", "park_tree"]:
 		_tex[n] = load(DIR + n + ".png")
+	for k in KIND_STYLE:
+		var id: int = KIND_STYLE[k]["sprite"]
+		if not _bld_tex.has(id):
+			_bld_tex[id] = load(DIR + "buildings/b%03d.png" % id)
 	for zone in BUILDINGS:
 		for id in BUILDINGS[zone]:
 			if not _bld_tex.has(id):
@@ -71,15 +86,21 @@ func set_city(data: Dictionary) -> void:
 	_lots_by_id.clear()
 	_grid_lot.clear()
 	_objects.clear()
+	_labels.clear()
 	for lot in city.get("lots", []):
 		_lots_by_id[lot["id"]] = lot
 		var zone: String = lot["zone"]
 		var lot_seed: int = hash(str(lot["id"]))
+		var building = lot.get("building")
+		if building != null:
+			_add_building(lot, building)
 		for dy in range(int(lot["h"])):
 			for dx in range(int(lot["w"])):
 				var gx := int(lot["x"]) + dx
 				var gy := int(lot["y"]) + dy
 				_grid_lot["%d,%d" % [gx, gy]] = lot
+				if building != null:
+					continue # вместо декора на участке стоит игровое здание
 				var tex: Texture2D
 				if zone == "park":
 					tex = _tex["park_tree"]
@@ -87,9 +108,24 @@ func set_city(data: Dictionary) -> void:
 					var set_: Array = BUILDINGS[zone]
 					tex = _bld_tex[set_[absi(hash("%d:%d:%d" % [lot_seed, gx, gy])) % set_.size()]]
 				var pos := iso(gx, gy) - Vector2(tex.get_width() / 2.0, _offset(tex))
-				_objects.append([gx + gy, gx, tex, pos])
+				_objects.append([gx + gy, gx, tex, pos, Vector2.ONE, Color.WHITE])
 	_objects.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
 	queue_redraw()
+
+
+func _add_building(lot: Dictionary, building: Dictionary) -> void:
+	var style: Dictionary = KIND_STYLE.get(building["kind"], KIND_STYLE["shop"])
+	var tex: Texture2D = _bld_tex[style["sprite"]]
+	var sc := float(lot["w"])
+	var x := int(lot["x"])
+	var y := int(lot["y"])
+	var sy: float = float(style["tall"])
+	var h := float(tex.get_height())
+	# Низ спрайта остаётся на уровне участка; вверх здание растягивается до нужной высоты.
+	var pos := iso(x, y) - Vector2(tex.get_width() * sc / 2.0, _offset(tex) * sc) + Vector2(0, h * sc - h * sy)
+	_objects.append([x + y + int(lot["w"]) + int(lot["h"]) - 2, x + int(lot["w"]) - 1, tex, pos, Vector2(sc, sy), style["tint"]])
+	var top := pos + Vector2(tex.get_width() * sc / 2.0, h * sy * 0.12)
+	_labels.append([top, "%s «%s»" % [BashFormat.kind(str(building["kind"])), str(building["name"])]])
 
 
 func refresh_city(data: Dictionary) -> void:
@@ -133,7 +169,8 @@ func _draw() -> void:
 			draw_texture(t, iso(gx, gy) - Vector2(HALF_W, 0))
 	# 2. Здания и деревья (уже отсортированы по глубине).
 	for o in _objects:
-		draw_texture(o[2], o[3])
+		var t: Texture2D = o[2]
+		draw_texture_rect(t, Rect2(o[3], t.get_size() * (o[4] as Vector2)), false, o[5])
 	# 3. Границы владения и выделение.
 	for lot in city["lots"]:
 		var owned = lot.get("owner_company_id") != null
@@ -148,6 +185,18 @@ func _draw() -> void:
 			draw_polyline(pts, BashPalette.GOLD if mine else BashPalette.TEAL_DEEP, 7.0)
 		if sel:
 			draw_polyline(pts, BashPalette.GOLD_SOFT, 10.0)
+	_draw_labels()
+
+
+func _draw_labels() -> void:
+	var font := ThemeDB.fallback_font
+	for l in _labels:
+		var text: String = l[1]
+		var size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26)
+		var r := Rect2(l[0] - Vector2(size.x / 2.0 + 10, size.y), size + Vector2(20, 12))
+		draw_rect(r, Color(1, 1, 1, 0.85))
+		draw_rect(r, BashPalette.TEAL_DEEP, false, 2.0)
+		draw_string(font, r.position + Vector2(10, size.y - 2), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, BashPalette.TEAL_DEEP)
 
 
 func _unhandled_input(event: InputEvent) -> void:
