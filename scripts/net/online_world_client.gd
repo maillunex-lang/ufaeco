@@ -38,6 +38,17 @@ const ERROR_TEXTS_RU := {
 	"rate_limited": "Слишком много запросов. Подождите немного.",
 	"message_too_large": "Сообщение слишком большое.",
 	"internal_error": "Внутренняя ошибка сервера. Попробуйте позже.",
+	"invalid_credentials": "Неверный логин или пароль.",
+	"login_taken": "Этот логин уже занят.",
+	"account_locked": "Слишком много неудачных попыток входа. Подождите минуту.",
+	"forbidden": "Нет прав на эту компанию.",
+	"not_found": "Объект не найден.",
+	"insufficient_funds": "Недостаточно средств.",
+	"limit_reached": "Достигнут лимит компаний.",
+	"company_name_taken": "Название компании уже занято.",
+	"enterprise_name_taken": "Предприятие с таким названием уже есть.",
+	"unknown_product": "Неизвестный товар.",
+	"insufficient_inventory": "Недостаточно товара на складе.",
 }
 
 const DISCONNECT_TEXTS_RU := {
@@ -60,6 +71,9 @@ var _protocol_version: int = 1
 var _heartbeat_interval: float = 5.0
 var _reconnect_timeout: float = 60.0
 var _resume_token: String = ""
+## Данные первого входа (пароль хранится только в памяти до успешной авторизации).
+var _first_auth: Dictionary = {}
+var _password_account: bool = false
 var _peer: WebSocketPeer = null
 var _was_open: bool = false
 var _intentional_close: bool = false
@@ -81,9 +95,25 @@ func connect_to_world(url: String = "") -> void:
 		websocket_url = url
 	_intentional_close = false
 	_no_retry = false
+	_password_account = false if _first_auth.is_empty() else _password_account
 	_attempt = 0
 	_outage_started_msec = 0
 	_open_socket("connecting")
+
+
+## Регистрация аккаунта по логину и паролю (после успеха клиент в сети).
+func register_account(login: String, password: String, display_name: String = "") -> void:
+	var payload := {"login": login, "password": password}
+	if not display_name.is_empty():
+		payload["display_name"] = display_name
+	_first_auth = {"type": "register", "payload": payload}
+	connect_to_world()
+
+
+## Вход по логину и паролю.
+func login_with_password(login: String, password: String) -> void:
+	_first_auth = {"type": "login", "payload": {"login": login, "password": password}}
+	connect_to_world()
 
 
 ## Корректно завершает сессию (повторное подключение к ней станет невозможным).
@@ -208,9 +238,16 @@ func _on_message(text: String) -> void:
 			_set_state("authenticating")
 			if session_id != "" and _resume_token != "":
 				_send("reconnect", {"session_id": session_id, "resume_token": _resume_token})
+			elif not _first_auth.is_empty():
+				var p: Dictionary = _first_auth["payload"].duplicate()
+				p["client_name"] = "basheco-godot"
+				p["client_version"] = "0.1.0"
+				_send(str(_first_auth["type"]), p)
 			else:
 				_send("auth", {"client_name": "basheco-godot", "client_version": "0.1.0"})
 		"auth_ok":
+			_password_account = not _first_auth.is_empty()
+			_first_auth = {} # пароль больше не хранится
 			player_id = str(payload["player_id"])
 			session_id = str(payload["session_id"])
 			_resume_token = str(payload["resume_token"])
@@ -242,6 +279,14 @@ func _on_server_error(code: String) -> void:
 		# Сессию не восстановить: следующее подключение выполнит новый вход.
 		session_id = ""
 		_resume_token = ""
+		if _password_account:
+			# Без пароля незаметно войти гостем нельзя: игрок должен войти заново.
+			_no_retry = true
+			network_error.emit("Сессия истекла. Войдите в аккаунт заново.")
+			return
+	elif code == "invalid_credentials" or code == "login_taken" or code == "account_locked":
+		_first_auth = {}
+		_no_retry = true
 	network_error.emit(ERROR_TEXTS_RU.get(code, "Ошибка сервера: %s" % code))
 
 

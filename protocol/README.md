@@ -46,6 +46,8 @@
 | type | payload |
 |---|---|
 | `auth` | `{ client_name: string, client_version: string, display_name?: string }` |
+| `register` | `{ client_name, client_version, login: /^[A-Za-z0-9_]{3,24}$/, password: 8..128, display_name? }` |
+| `login` | `{ client_name, client_version, login, password }` |
 | `reconnect` | `{ session_id: uuid, resume_token: string }` |
 | `heartbeat` | `{ client_time: number }` |
 | `command` | `{ name: string, args: object }` |
@@ -63,12 +65,24 @@
 | `error` | `{ code, message }` (message — по-русски, для логов; клиент показывает свой текст по `code`) |
 | `disconnect` | `{ reason }` |
 
-## Команды (этап 1)
+## Команды
 
-- `session.get_profile` — `args: {}`.
-- `session.set_display_name` — `args: { display_name: string(2..32) }`.
+Все команды требуют `request_id`. Бизнес-ошибка (`forbidden`, `insufficient_funds` …) возвращается как
+`command_result` с `ok: false`; такая команда **не расходует** `request_id` (транзакция откатывается).
+Деньги — целые копейки.
 
-Команды экономики (рынок, контракты, аренда) появятся на следующих этапах.
+| команда | args | результат |
+|---|---|---|
+| `session.get_profile` | `{}` | `player_id, display_name, login, is_guest` |
+| `session.set_display_name` | `{ display_name }` | профиль |
+| `company.create` | `{ name: 2..64 }` | `company` (стартовый капитал проводится через журнал) |
+| `company.list` | `{}` | `companies` (только свои) |
+| `company.get` | `{ company_id }` | `company, inventory, enterprises` (только владелец) |
+| `company.journal` | `{ company_id, limit?: 1..100 }` | `entries` (новые первыми) |
+| `enterprise.create` | `{ company_id, kind, name }` | `enterprise` (стоимость списывается с баланса) |
+
+Виды предприятий и стоимости — гипотезы: `server/src/companies/catalog.ts`.
+Команд «выдать деньги/товар» не существует; любое поле вроде `balance_cents` в `args` → `invalid_payload`.
 
 ## Идемпотентность
 

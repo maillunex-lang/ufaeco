@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SPEC } from './constants.js';
+import { ENTERPRISE_KIND_IDS } from '../companies/catalog.js';
 
 const uuid = z.uuid();
 
@@ -26,6 +27,11 @@ export const authPayload = z.strictObject({
   client_version: z.string().min(1).max(32),
   display_name: displayName.optional(),
 });
+const clientInfo = { client_name: z.string().min(1).max(64), client_version: z.string().min(1).max(32) };
+export const loginName = z.string().regex(/^[A-Za-z0-9_]{3,24}$/);
+export const password = z.string().min(SPEC.limits.password_min).max(SPEC.limits.password_max);
+export const registerPayload = z.strictObject({ ...clientInfo, login: loginName, password, display_name: displayName.optional() });
+export const loginPayload = z.strictObject({ ...clientInfo, login: loginName, password });
 export const reconnectPayload = z.strictObject({
   session_id: uuid,
   resume_token: z.string().min(16).max(256),
@@ -39,6 +45,8 @@ export const clientDisconnectPayload = z.strictObject({ reason: z.literal('clien
 
 export const clientPayloadSchemas = {
   auth: authPayload,
+  register: registerPayload,
+  login: loginPayload,
   reconnect: reconnectPayload,
   heartbeat: heartbeatPayload,
   command: commandPayload,
@@ -46,10 +54,17 @@ export const clientPayloadSchemas = {
 } as const;
 export type ClientMessageType = keyof typeof clientPayloadSchemas;
 
+const companyName = z.string().trim().min(SPEC.limits.company_name_min).max(SPEC.limits.company_name_max);
+
 // ---- аргументы команд (strict: клиентский balance и т.п. отклоняются) ----
 export const commandArgSchemas = {
   'session.get_profile': z.strictObject({}),
   'session.set_display_name': z.strictObject({ display_name: displayName }),
+  'company.create': z.strictObject({ name: companyName }),
+  'company.list': z.strictObject({}),
+  'company.get': z.strictObject({ company_id: uuid }),
+  'company.journal': z.strictObject({ company_id: uuid, limit: z.number().int().min(1).max(100).optional() }),
+  'enterprise.create': z.strictObject({ company_id: uuid, kind: z.enum(ENTERPRISE_KIND_IDS), name: companyName }),
 } as const;
 export type CommandName = keyof typeof commandArgSchemas;
 

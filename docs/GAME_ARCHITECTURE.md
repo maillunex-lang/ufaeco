@@ -34,8 +34,8 @@ PostgreSQL / Durable Ledger
 
 ## Модули сервера (`server/src`)
 
-- `accounts`, `sessions`, `world` — реализованы (этап 1);
-- `companies`, `market`, `contracts`, `real_estate` — только интерфейсы, функциональности нет;
+- `accounts` (гость, регистрация, вход), `sessions`, `world`, `companies` (компании, журнал баланса, инвентарь, предприятия), `commands` (реестр команд) — реализованы (этапы 1–2);
+- `market`, `contracts`, `real_estate` — только интерфейсы, функциональности нет;
 - `persistence` (pool, транзакции, миграции, audit, идемпотентность), `protocol` (Zod-схемы), `security` (rate limiter, токены), `net` (WebSocket-шлюз).
 
 ## Протокол
@@ -48,6 +48,12 @@ PostgreSQL / Durable Ledger
 - Идемпотентность: `command` требует `request_id`; пара `(player_id, request_id)` выполняется ровно один раз (резерв, выполнение и ответ — в одной транзакции).
 - Тик мира (`TICK_RATE`) и рассылка snapshots (`SNAPSHOT_RATE`) общие для всех клиентов.
 - Защита: rate limit на соединение, лимит размера сообщения, таймаут авторизации, heartbeat-таймаут.
+
+## Деньги и журнал
+
+Баланс компании меняется только в `CompanyService.credit/debit` внутри транзакции команды; списание атомарно
+(`UPDATE … WHERE balance_cents >= сумма`), каждая операция пишет строку в `ledger_entries`
+(инвариант: баланс = сумма записей). Проверка прав владельца — в сервисе, а не в клиенте.
 
 ## Принцип авторитетности
 
