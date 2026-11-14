@@ -108,12 +108,12 @@ func _on_command_result(request_id: String, payload: Dictionary) -> void:
 
 func _on_connection_state_changed(state: String) -> void:
 	_refresh_status()
-	if state == "online":
+	if state == "online" or state == "demo":
 		_ever_online = true
 		server_dialog.visible = false
 	elif (state == "reconnecting" or state == "failed") and not _ever_online:
 		_show_server_dialog(true)
-	if state == "online" and not _bootstrapped:
+	if (state == "online" or state == "demo") and not _bootstrapped:
 		_bootstrapped = true
 		_call("catalog.get", {}, func(r):
 			for k in r["enterprise_kinds"]:
@@ -543,6 +543,15 @@ func _show_server_dialog(from_error: bool) -> void:
 	server_dialog.visible = true
 
 
+func _on_demo_pressed() -> void:
+	_bootstrapped = false
+	company_id = ""
+	error_label.text = ""
+	server_dialog.visible = false
+	if network.start_demo():
+		_on_connection_state_changed("demo")
+
+
 func _on_server_apply() -> void:
 	if network.change_server(server_edit.text):
 		server_dialog.visible = false
@@ -585,6 +594,11 @@ func _build_server_dialog(ui: Control) -> void:
 	ok.custom_minimum_size = Vector2(220, 56)
 	ok.pressed.connect(_on_server_apply)
 	row.add_child(ok)
+	var demo := Button.new()
+	demo.text = "Демо без сервера"
+	demo.custom_minimum_size = Vector2(260, 56)
+	demo.pressed.connect(_on_demo_pressed)
+	row.add_child(demo)
 	var close := Button.new()
 	close.text = "Закрыть"
 	close.custom_minimum_size = Vector2(160, 56)

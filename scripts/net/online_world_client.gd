@@ -23,6 +23,7 @@ const STATE_LABELS_RU := {
 	"online": "в сети",
 	"reconnecting": "переподключение…",
 	"failed": "нет связи с сервером",
+	"demo": "демо без сервера",
 }
 
 const ERROR_TEXTS_RU := {
@@ -60,6 +61,7 @@ const ERROR_TEXTS_RU := {
 	"cell_taken": "Клетка уже принадлежит другой компании.",
 	"cells_not_owned": "Эти клетки вам не принадлежат.",
 	"out_of_bounds": "За границами города.",
+	"demo_mode": "Демо без сервера: можно смотреть карты, действия доступны при подключении к серверу (кнопка «Сервер»).",
 	"zoning_violation": "Это здание нельзя строить в данной зоне.",
 }
 
@@ -104,11 +106,70 @@ func _ready() -> void:
 	set_process(true)
 
 
+const DEMO_PATH := "res://demo/demo_world.json"
+var demo_mode: bool = false
+var _demo: Dictionary = {}
+
+
+## Офлайн-демо: данные мира (регион, города, статистика) читаются из файла внутри приложения, сервер не нужен.
+## Команды изменения (покупка, постройка) в демо отклоняются. Данные — снимок настоящего сервера, не источник истины.
+func start_demo() -> bool:
+	if _demo.is_empty():
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string(DEMO_PATH)) if FileAccess.file_exists(DEMO_PATH) else null
+		if typeof(parsed) != TYPE_DICTIONARY:
+			network_error.emit("Демо-данные не найдены в приложении.")
+			return false
+		_demo = parsed
+	if _peer != null:
+		_intentional_close = true
+		_peer.close()
+		_peer = null
+	_retry_left = -1.0
+	demo_mode = true
+	clock = {}
+	connected = true
+	player_id = "demo"
+	_set_state("demo")
+	return true
+
+
+func _demo_command(command_name: String, args: Dictionary) -> Dictionary:
+	var company := {"id": "demo-company", "name": "Демо-компания", "balance_cents": 100000000}
+	match command_name:
+		"catalog.get":
+			return {"ok": true, "result": _demo["catalog"]}
+		"company.list":
+			return {"ok": true, "result": {"companies": [company]}}
+		"company.create":
+			return {"ok": true, "result": {"company": company}}
+		"region.get":
+			return {"ok": true, "result": _demo["region"]}
+		"map.get_city":
+			var c = _demo["cities"].get(str(args.get("city_id", "")))
+			if c != null:
+				return {"ok": true, "result": {"city": c}}
+			return {"ok": false, "error": {"code": "not_found"}}
+		"city.get_stats":
+			var st = _demo["stats"].get(str(args.get("city_id", "")))
+			if st != null:
+				return {"ok": true, "result": st}
+			return {"ok": false, "error": {"code": "not_found"}}
+	return {"ok": false, "error": {"code": "demo_mode"}}
+
+
+func _emit_demo_result(rid: String, payload: Dictionary) -> void:
+	command_result_received.emit(rid, payload)
+
+
 ## Загружает конфигурацию и подключается. url — необязательное переопределение websocket_url.
 func connect_to_world(url: String = "") -> void:
 	_load_config()
 	if not url.is_empty():
 		websocket_url = url
+	elif OS.has_feature("android") and saved_server_url().is_empty() and OS.get_environment("BASHECO_WEBSOCKET_URL").is_empty():
+		if start_demo(): # на телефоне без заданного адреса сервера — сразу демо
+			return
+	demo_mode = false
 	_intentional_close = false
 	_no_retry = false
 	_password_account = false if _first_auth.is_empty() else _password_account
@@ -140,6 +201,7 @@ func change_server(url: String) -> bool:
 	var cfg := ConfigFile.new()
 	cfg.set_value("server", "websocket_url", url)
 	cfg.save(SETTINGS_PATH)
+	demo_mode = false
 	if _peer != null:
 		_intentional_close = true
 		_peer.close()
@@ -186,6 +248,9 @@ func send_command(command_name: String, args: Dictionary = {}) -> String:
 	if not connected or command_name.is_empty():
 		return ""
 	var request_id := _uuid4()
+	if demo_mode:
+		_emit_demo_result.call_deferred(request_id, _demo_command(command_name, args))
+		return request_id
 	_send("command", {"name": command_name, "args": args}, request_id)
 	return request_id
 
