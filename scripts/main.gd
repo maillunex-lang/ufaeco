@@ -20,6 +20,26 @@ var region_open: Button
 var nav_region: HBoxContainer
 var nav_city: HBoxContainer
 var legend: PanelContainer
+# --- панель клетки (город)
+var cell_panel: PanelContainer
+var cell_title: Label
+var cell_info: Label
+var cell_mode := "inspect" # inspect | buy | build
+var buy_w: SpinBox
+var buy_h: SpinBox
+var buy_row: VBoxContainer
+var build_row: VBoxContainer
+var buy_label: Label
+var build_label: Label
+var buy_button: Button
+var build_button: Button
+var demolish_button: Button
+var kind_option: OptionButton
+var rotate_check: CheckButton
+var build_name: LineEdit
+var mode_buy_button: Button
+var mode_build_button: Button
+var sel := Vector2i(-1, -1)
 var company_id: String = ""
 var company_name: String = ""
 var balance_cents: int = 0
@@ -31,12 +51,6 @@ var _build_kinds: Array[String] = []
 
 @onready var status_label: Label = %Status
 @onready var error_label: Label = %NetError
-@onready var lot_title: Label = %LotTitle
-@onready var lot_info: Label = %LotInfo
-@onready var buy_button: Button = %BuyButton
-@onready var kind_option: OptionButton = %KindOption
-@onready var build_name: LineEdit = %BuildName
-@onready var build_button: Button = %BuildButton
 
 
 func _ready() -> void:
@@ -52,12 +66,9 @@ func _ready() -> void:
 	map_view = MAP_VIEW.new()
 	map_view.viewport_size = get_viewport_rect().size
 	add_child(map_view)
-	map_view.lot_selected.connect(_on_lot_selected)
+	map_view.cell_selected.connect(_on_cell_selected)
 	_build_extra_ui(ui)
 	_set_mode("region")
-	buy_button.pressed.connect(_on_buy_pressed)
-	build_button.pressed.connect(_on_build_pressed)
-	kind_option.item_selected.connect(func(_i): _update_build_button())
 	network = OnlineWorldClient.new()
 	add_child(network)
 	network.connection_state_changed.connect(_on_connection_state_changed)
@@ -94,6 +105,7 @@ func _on_connection_state_changed(state: String) -> void:
 		_call("catalog.get", {}, func(r):
 			for k in r["enterprise_kinds"]:
 				catalog[str(k["kind"])] = k
+			_fill_kind_options()
 			_call("company.list", {}, _on_company_list))
 
 
@@ -140,105 +152,199 @@ func _load_city(fit: bool) -> void:
 		map_view.set_overlay(overlay_name)
 		if fit:
 			map_view.fit_to_view(get_viewport_rect().size)
-		_on_lot_selected(map_view.selected_lot()))
+		_refresh_cell_panel())
 
 
-func _on_lot_selected(lot: Dictionary) -> void:
-	kind_option.visible = false
-	build_name.visible = false
-	build_button.visible = false
-	buy_button.visible = true
-	buy_button.disabled = true
-	if lot.is_empty():
-		lot_title.text = "Выберите участок"
-		lot_info.text = "Нажмите на участок карты. Перетаскивание — сдвиг, колесо или щипок — масштаб."
+# ------------------------------------------------------------------ клетки: покупка и постройка
+
+func _on_cell_selected(x: int, y: int) -> void:
+	sel = Vector2i(x, y)
+	_refresh_cell_panel()
+
+
+func _clear_cell() -> void:
+	sel = Vector2i(-1, -1)
+	cell_mode = "inspect"
+	map_view.set_selected(-1, -1)
+	map_view.set_preview({})
+	_refresh_cell_panel()
+
+
+func _kind_footprint(kind: String) -> Vector2i:
+	var fp: Dictionary = catalog.get(kind, {}).get("footprint", {"w": 1, "h": 1})
+	var w := int(fp["w"])
+	var h := int(fp["h"])
+	return Vector2i(h, w) if rotate_check.button_pressed else Vector2i(w, h)
+
+
+func _selected_kind() -> String:
+	var idx := kind_option.selected
+	return "" if idx < 0 or idx >= _build_kinds.size() else _build_kinds[idx]
+
+
+func _set_cell_mode(m: String) -> void:
+	cell_mode = m if cell_mode != m else "inspect"
+	_refresh_cell_panel()
+
+
+## Проверка покупки прямоугольника на клиенте (окончательно решает сервер): все клетки продаются и свободны.
+func _rect_buyable(x: int, y: int, w: int, h: int) -> bool:
+	for yy in range(y, y + h):
+		for xx in range(x, x + w):
+			if not map_view.is_buyable(xx, yy):
+				return false
+	return true
+
+
+func _rect_total_price(x: int, y: int, w: int, h: int) -> int:
+	var total := 0
+	for yy in range(y, y + h):
+		for xx in range(x, x + w):
+			total += map_view.price_at(xx, yy)
+	return total
+
+
+## Проверка постройки: клетки свои, без зданий, зона подходит виду.
+func _rect_buildable(kind: String, x: int, y: int, w: int, h: int) -> bool:
+	var zones: Array = catalog.get(kind, {}).get("zones", [])
+	for yy in range(y, y + h):
+		for xx in range(x, x + w):
+			if not map_view.in_bounds(xx, yy) or map_view.owner_company_at(xx, yy) != company_id or not map_view.building_at(xx, yy).is_empty():
+				return false
+			if not (BashFormat.zone_by_letter(map_view.zone_at(xx, yy)) in zones):
+				return false
+	return true
+
+
+## Только зонирование (для проверок): подходит ли зона клеток виду здания, без учёта владения.
+func _rect_buildable_zone_only(kind: String, x: int, y: int, w: int, h: int) -> bool:
+	var zones: Array = catalog.get(kind, {}).get("zones", [])
+	for yy in range(y, y + h):
+		for xx in range(x, x + w):
+			if not (BashFormat.zone_by_letter(map_view.zone_at(xx, yy)) in zones):
+				return false
+	return true
+
+
+func _refresh_cell_panel() -> void:
+	buy_row.visible = cell_mode == "buy"
+	build_row.visible = cell_mode == "build"
+	demolish_button.visible = false
+	map_view.set_preview({})
+	mode_buy_button.button_pressed = cell_mode == "buy"
+	mode_build_button.button_pressed = cell_mode == "build"
+	if sel.x < 0:
+		cell_title.text = "Выберите клетку"
+		cell_info.text = "Нажмите на клетку карты. Перетаскивание — сдвиг, колесо или щипок — масштаб."
+		mode_buy_button.disabled = true
+		mode_build_button.disabled = true
 		return
-	lot_title.text = "%s • %d×%d" % [BashFormat.zone(str(lot["zone"])), int(lot["w"]), int(lot["h"])]
-	var price := int(lot["price_cents"])
-	var owner = lot.get("owner_company_id")
-	var building = lot.get("building")
-	if str(lot["zone"]) == "park":
-		lot_info.text = "Городской парк. Не продаётся."
-	elif building != null:
-		buy_button.visible = false
-		lot_info.text = _building_text(lot, building)
-	elif owner != null and str(owner) == company_id:
-		buy_button.visible = false
-		lot_info.text = "Ваш участок %s. Построить предприятие:" % str(lot["id"])
-		_show_build_ui(lot)
-	elif owner != null:
-		lot_info.text = "Владелец: %s" % str(lot.get("owner_name", "—"))
-	elif not lot.get("for_sale", false):
-		lot_info.text = "Застроено городом (уровень %d из 3). Не продаётся." % int(lot.get("development", 0))
+	map_view.set_selected(sel.x, sel.y)
+	var info := map_view.cell_info(sel.x, sel.y)
+	if info.is_empty():
+		return
+	cell_title.text = "Клетка %d, %d" % [sel.x, sel.y]
+	var b: Dictionary = info["building"]
+	var lines: Array[String] = []
+	var tile: String = info["tile"]
+	if tile == "#" or tile == "=":
+		lines.append("Дорога")
+	elif tile == "~":
+		lines.append("Вода")
 	else:
-		lot_info.text = "Участок %s\nЦена: %s\nПокупает: %s" % [str(lot["id"]), BashFormat.money(price), company_name]
-		buy_button.disabled = company_id == "" or price > balance_cents
+		lines.append("%s • стоимость земли %d • трафик %d" % [BashFormat.zone_by_letter_ru(info["zone"]), int(info["land_value"]), int(info["traffic"])])
+	if not b.is_empty():
+		if bool(b.get("city_owned", false)):
+			lines.append("Городская застройка: %s %d×%d, этажей: %d" % [BashFormat.npc_kind(str(b["kind"])), int(b["w"]), int(b["h"]), int(b["floors"])])
+		else:
+			lines.append("%s «%s» %d×%d" % [BashFormat.kind(str(b["kind"])), str(b.get("name", "")), int(b["w"]), int(b["h"])])
+			lines.append("Владелец: %s%s" % [str(b.get("owner_name", "—")), " (вы)" if str(b.get("owner_company_id")) == company_id else ""])
+			demolish_button.visible = str(b.get("owner_company_id")) == company_id
+	elif str(info["owner_company_id"]) != "":
+		lines.append("Земля: %s%s" % [str(info["owner_name"]), " (вы)" if str(info["owner_company_id"]) == company_id else ""])
+	elif bool(info["buyable"]):
+		lines.append("Свободна. Цена: %s" % BashFormat.money(int(info["price_cents"])))
+	elif tile == "." and info["zone"] == "p":
+		lines.append("Городской парк. Не продаётся.")
+	elif tile == ".":
+		lines.append("Вне городской черты — не продаётся.")
+	cell_info.text = "\n".join(lines)
+	mode_buy_button.disabled = company_id == "" or not bool(info["buyable"])
+	mode_build_button.disabled = company_id == "" or str(info["owner_company_id"]) != company_id or not b.is_empty()
+	if cell_mode == "buy":
+		_update_buy_preview()
+	elif cell_mode == "build":
+		_update_build_preview()
 
 
-func _building_text(lot: Dictionary, building: Dictionary) -> String:
-	var k := str(building["kind"])
-	var text := "%s «%s»" % [BashFormat.kind(k), str(building["name"])]
-	var info: Dictionary = catalog.get(k, {})
-	if not info.is_empty():
-		text += "\nСтоимость постройки: %s" % BashFormat.money(int(info["cost_cents"]))
-	text += "\nПроизводство появится на следующих этапах."
-	var owner = lot.get("owner_company_id")
-	text += "\nВладелец: %s%s" % [str(lot.get("owner_name", "—")), " (вы)" if owner != null and str(owner) == company_id else ""]
-	return text
+func _update_buy_preview() -> void:
+	var w := int(buy_w.value)
+	var h := int(buy_h.value)
+	var ok := _rect_buyable(sel.x, sel.y, w, h)
+	map_view.set_preview({"x": sel.x, "y": sel.y, "w": w, "h": h, "valid": ok})
+	var total := _rect_total_price(sel.x, sel.y, w, h) if ok else 0
+	buy_label.text = "Участок %d×%d = %d клеток" % [w, h, w * h] + ("\nЦена: %s" % BashFormat.money(total) if ok else "\nНельзя: есть занятые или не продающиеся клетки")
+	buy_button.disabled = not ok or total > balance_cents
+	buy_button.text = "Купить за %s" % BashFormat.money(total) if ok else "Купить"
 
 
-func _show_build_ui(lot: Dictionary) -> void:
+func _update_build_preview() -> void:
+	var kind := _selected_kind()
+	if kind == "":
+		build_label.text = "В этой зоне строить нечего."
+		build_button.disabled = true
+		return
+	var fp := _kind_footprint(kind)
+	var ok := _rect_buildable(kind, sel.x, sel.y, fp.x, fp.y)
+	map_view.set_preview({"x": sel.x, "y": sel.y, "w": fp.x, "h": fp.y, "valid": ok})
+	var cost := int(catalog[kind]["cost_cents"])
+	build_label.text = "%s: %d×%d клеток" % [BashFormat.kind(kind), fp.x, fp.y] + ("" if ok else "\nНельзя: клетки должны быть вашими, свободными и подходящей зоны")
+	build_button.disabled = not ok or cost > balance_cents
+	build_button.text = "Построить за %s" % BashFormat.money(cost)
+
+
+func _fill_kind_options() -> void:
 	_build_kinds.clear()
 	kind_option.clear()
 	for k in catalog:
-		if str(lot["zone"]) in catalog[k]["zones"]:
-			_build_kinds.append(k)
-			kind_option.add_item("%s — %s" % [BashFormat.kind(k), BashFormat.money(int(catalog[k]["cost_cents"]))])
-	if _build_kinds.is_empty():
-		lot_info.text += "\nВ этой зоне строить нечего."
-		return
-	build_name.text = ""
-	kind_option.visible = true
-	build_name.visible = true
-	build_button.visible = true
-	_update_build_button()
-
-
-func _update_build_button() -> void:
-	var idx := kind_option.selected
-	if idx < 0 or idx >= _build_kinds.size():
-		return
-	var k := _build_kinds[idx]
-	var cost := int(catalog[k]["cost_cents"])
-	build_button.text = "Построить за %s" % BashFormat.money(cost)
-	build_button.disabled = cost > balance_cents
-
-
-func _on_build_pressed() -> void:
-	var lot := map_view.selected_lot()
-	var idx := kind_option.selected
-	if lot.is_empty() or idx < 0 or idx >= _build_kinds.size():
-		return
-	var k := _build_kinds[idx]
-	var name_text := build_name.text.strip_edges()
-	if name_text.length() < 2:
-		name_text = "%s №%d" % [BashFormat.kind(k), randi() % 900 + 100]
-	build_button.disabled = true
-	_call("enterprise.create", {"company_id": company_id, "kind": k, "name": name_text, "lot_id": str(lot["id"])}, func(r):
-		balance_cents = int(r["enterprise"]["balance_cents"])
-		_refresh_status()
-		_load_city(false))
+		_build_kinds.append(k)
+		var fp: Dictionary = catalog[k]["footprint"]
+		kind_option.add_item("%s %d×%d — %s" % [BashFormat.kind(k), int(fp["w"]), int(fp["h"]), BashFormat.money(int(catalog[k]["cost_cents"]))])
 
 
 func _on_buy_pressed() -> void:
-	var lot := map_view.selected_lot()
-	if lot.is_empty() or company_id == "":
+	if sel.x < 0 or company_id == "":
 		return
+	var args := {"company_id": company_id, "city_id": city_id, "x": sel.x, "y": sel.y, "w": int(buy_w.value), "h": int(buy_h.value)}
 	buy_button.disabled = true
-	_call("map.buy_lot", {"company_id": company_id, "lot_id": str(lot["id"])}, func(r):
+	_call("map.buy_cells", args, func(r):
 		balance_cents = int(r["purchase"]["balance_cents"])
+		cell_mode = "inspect"
 		_refresh_status()
 		_load_city(false))
+
+
+func _on_build_pressed() -> void:
+	var kind := _selected_kind()
+	if sel.x < 0 or kind == "" or company_id == "":
+		return
+	var name_text := build_name.text.strip_edges()
+	if name_text.length() < 2:
+		name_text = "%s №%d" % [BashFormat.kind(kind), randi() % 900 + 100]
+	build_button.disabled = true
+	_call("building.place", {"company_id": company_id, "city_id": city_id, "x": sel.x, "y": sel.y, "kind": kind,
+		"rotated": rotate_check.button_pressed, "name": name_text}, func(r):
+		balance_cents = int(r["enterprise"]["balance_cents"])
+		cell_mode = "inspect"
+		_refresh_status()
+		_load_city(false))
+
+
+func _on_demolish_pressed() -> void:
+	var b := map_view.building_at(sel.x, sel.y)
+	if b.is_empty():
+		return
+	_call("building.demolish", {"building_id": str(b["id"])}, func(_r): _load_city(false))
 
 
 func _refresh_status() -> void:
@@ -271,7 +377,7 @@ func _set_mode(m: String) -> void:
 	legend.visible = is_region
 	nav_region.visible = is_region
 	nav_city.visible = not is_region
-	get_node("Hud/UI/LotPanel").visible = not is_region
+	cell_panel.visible = not is_region
 	_refresh_status()
 
 
@@ -286,10 +392,10 @@ func _on_region_city_selected(id: String) -> void:
 	if c.is_empty():
 		return
 	region_title.text = str(c["name"])
-	region_info.text = "Население: %s\nСредняя зарплата: %s ₽/мес.\nЦена земли: %s за тайл\nПригодность земли для сельхоза: %d%%\nОтрасли: %s\nУчастков: %d, куплено: %d%s" % [
+	region_info.text = "Население: %s\nСредняя зарплата: %s ₽/мес.\nЦена земли: %s за клетку\nПригодность земли для сельхоза: %d%%\nОтрасли: %s\nЗданий: %d, клеток в собственности: %d%s" % [
 		BashFormat.thousands(int(c["population"])), BashFormat.thousands(int(c["wage_rub"])),
 		BashFormat.money(int(c["land_base_cents_per_tile"])), int(float(c["farmland_index"]) * 100.0),
-		BashFormat.tags(c["specialization"]), int(c["lots"]), int(c["owned_lots"]),
+		BashFormat.tags(c["specialization"]), int(c["buildings"]), int(c["owned_cells"]),
 		"\nЛогистический хаб (внешний рынок)" if c.get("has_hub", false) else ""]
 	_call("city.get_stats", {"city_id": id, "months": 24}, func(r):
 		var hist: Array = r["stats"]["history"]
@@ -313,8 +419,7 @@ func _open_city(id: String) -> void:
 		return
 	city_id = id
 	city_name = str(region_view.city(id).get("name", id))
-	map_view.selected_lot_id = ""
-	_on_lot_selected({})
+	_clear_cell()
 	_set_mode("city")
 	_load_city(true)
 
@@ -376,7 +481,7 @@ func _build_extra_ui(ui: Control) -> void:
 	back.pressed.connect(_back_to_region)
 	nav_city.add_child(back)
 	var group := ButtonGroup.new()
-	for item in [["", "Без слоя"], ["land", "Стоимость земли"], ["traffic", "Трафик"]]:
+	for item in [["", "Без слоя"], ["zones", "Зоны"], ["land", "Земля"], ["traffic", "Трафик"], ["buyable", "Купить"]]:
 		var b := Button.new()
 		b.text = item[1]
 		b.toggle_mode = true
@@ -406,3 +511,100 @@ func _build_extra_ui(ui: Control) -> void:
 		l.add_theme_font_size_override("font_size", 14)
 		row.add_child(l)
 		lv.add_child(row)
+	_build_cell_panel(ui)
+
+
+func _build_cell_panel(ui: Control) -> void:
+	cell_panel = PanelContainer.new()
+	cell_panel.position = Vector2(890, 330)
+	cell_panel.size = Vector2(370, 380)
+	ui.add_child(cell_panel)
+	var box := VBoxContainer.new()
+	cell_panel.add_child(box)
+	cell_title = Label.new()
+	cell_title.add_theme_font_size_override("font_size", 20)
+	box.add_child(cell_title)
+	cell_info = Label.new()
+	cell_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cell_info.custom_minimum_size = Vector2(330, 0)
+	box.add_child(cell_info)
+	var modes := HBoxContainer.new()
+	box.add_child(modes)
+	mode_buy_button = Button.new()
+	mode_buy_button.text = "Купить землю"
+	mode_buy_button.toggle_mode = true
+	mode_buy_button.custom_minimum_size = Vector2(150, 48)
+	mode_buy_button.pressed.connect(func(): _set_cell_mode("buy"))
+	modes.add_child(mode_buy_button)
+	mode_build_button = Button.new()
+	mode_build_button.text = "Построить"
+	mode_build_button.toggle_mode = true
+	mode_build_button.custom_minimum_size = Vector2(150, 48)
+	mode_build_button.pressed.connect(func(): _set_cell_mode("build"))
+	modes.add_child(mode_build_button)
+	# покупка: размер прямоугольника
+	buy_row = VBoxContainer.new()
+	box.add_child(buy_row)
+	var sizes := HBoxContainer.new()
+	buy_row.add_child(sizes)
+	var lw := Label.new()
+	lw.text = "Ширина"
+	sizes.add_child(lw)
+	buy_w = SpinBox.new()
+	buy_w.min_value = 1
+	buy_w.max_value = 12
+	buy_w.value = 2
+	buy_w.value_changed.connect(func(_v): _update_buy_preview())
+	sizes.add_child(buy_w)
+	var lh := Label.new()
+	lh.text = " Высота"
+	sizes.add_child(lh)
+	buy_h = SpinBox.new()
+	buy_h.min_value = 1
+	buy_h.max_value = 12
+	buy_h.value = 2
+	buy_h.value_changed.connect(func(_v): _update_buy_preview())
+	sizes.add_child(buy_h)
+	buy_label = Label.new()
+	buy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	buy_label.custom_minimum_size = Vector2(330, 0)
+	buy_row.add_child(buy_label)
+	buy_button = Button.new()
+	buy_button.text = "Купить"
+	buy_button.custom_minimum_size = Vector2(0, 52)
+	buy_button.pressed.connect(_on_buy_pressed)
+	buy_row.add_child(buy_button)
+	# постройка
+	build_row = VBoxContainer.new()
+	box.add_child(build_row)
+	kind_option = OptionButton.new()
+	kind_option.custom_minimum_size = Vector2(0, 44)
+	kind_option.item_selected.connect(func(_i): _update_build_preview())
+	build_row.add_child(kind_option)
+	rotate_check = CheckButton.new()
+	rotate_check.text = "Повернуть на 90°"
+	rotate_check.toggled.connect(func(_on): _update_build_preview())
+	build_row.add_child(rotate_check)
+	build_name = LineEdit.new()
+	build_name.placeholder_text = "Название предприятия"
+	build_name.max_length = 40
+	build_name.custom_minimum_size = Vector2(0, 44)
+	build_row.add_child(build_name)
+	build_label = Label.new()
+	build_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	build_label.custom_minimum_size = Vector2(330, 0)
+	build_row.add_child(build_label)
+	build_button = Button.new()
+	build_button.text = "Построить"
+	build_button.custom_minimum_size = Vector2(0, 52)
+	build_button.pressed.connect(_on_build_pressed)
+	build_row.add_child(build_button)
+	demolish_button = Button.new()
+	demolish_button.text = "Снести здание"
+	demolish_button.custom_minimum_size = Vector2(0, 48)
+	demolish_button.pressed.connect(_on_demolish_pressed)
+	box.add_child(demolish_button)
+	buy_row.visible = false
+	build_row.visible = false
+	demolish_button.visible = false
+	cell_panel.visible = false

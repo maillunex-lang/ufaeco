@@ -23,6 +23,28 @@ func _initialize() -> void:
 	client.command_result_received.connect(func(rid, p): results[rid] = p)
 	_run()
 
+## Свободный прямоугольник w×h из продаваемых клеток нужных зон (буквы r/c/i); (-1,-1), если нет.
+func _find_rect(city: Dictionary, w: int, h: int, zones: Array) -> Vector2i:
+	var occupied := {}
+	for bd in city["buildings"]:
+		for dy in range(int(bd["h"])):
+			for dx in range(int(bd["w"])):
+				occupied["%d,%d" % [int(bd["x"]) + dx, int(bd["y"]) + dy]] = true
+	for run in city["parcels"]["runs"]:
+		for i in range(int(run[2])):
+			occupied["%d,%d" % [int(run[1]) + i, int(run[0])]] = true
+	for y in range(int(city["height"]) - h):
+		for x in range(int(city["width"]) - w):
+			var ok := true
+			for yy in range(y, y + h):
+				for xx in range(x, x + w):
+					if String(city["cells"]["buyable"][yy])[xx] != "1" or occupied.has("%d,%d" % [xx, yy]) or not (String(city["cells"]["zones"][yy])[xx] in zones):
+						ok = false
+			if ok:
+				return Vector2i(x, y)
+	return Vector2i(-1, -1)
+
+
 func check(cond: bool, msg: String) -> void:
 	print(("  ok   " if cond else "  FAIL ") + msg)
 	if not cond:
@@ -74,45 +96,39 @@ func _run() -> void:
 	await wait_until(func(): return results.has(reg), 3.0)
 	var rr: Dictionary = results.get(reg, {}).get("result", {}).get("region", {})
 	check(rr.get("cities", []).size() == 21, "region.get: 21 город")
-	check(rr.get("outline", []).size() > 100, "region.get: контур региона")
+	check(rr.get("grid", {}).get("mask", []).size() > 50, "region.get: сетка региона")
 	var fq: String = client.send_command("region.freight_quote", {"from_city": "ufa", "to_city": "sibay", "tonnes": 10})
 	await wait_until(func(): return results.has(fq), 3.0)
 	check(str(results.get(fq, {}).get("result", {}).get("quote", {}).get("best", "")) == "rail", "фрахт Уфа → Сибай выгоднее по железной дороге")
 
-	print("2b. карта")
+	print("2b. карта: сетка, земля клетками, здание с габаритами")
 	var mapq: String = client.send_command("map.get_city", {"city_id": "ufa"})
 	await wait_until(func(): return results.has(mapq), 3.0)
 	var city: Dictionary = results.get(mapq, {}).get("result", {}).get("city", {})
-	check(not city.is_empty() and city["tiles"].size() == int(city["height"]), "карта города получена (%dx%d, участков: %d)" % [int(city.get("width", 0)), int(city.get("height", 0)), city.get("lots", []).size()])
-	var free_lot := {}
-	for l in city.get("lots", []):
-		if l["zone"] == "residential" and l["for_sale"]:
-			free_lot = l
-			break
-	var buy: String = client.send_command("map.buy_lot", {"company_id": cid, "lot_id": free_lot["id"]})
+	check(not city.is_empty() and city["tiles"].size() == int(city["height"]), "карта города получена (%dx%d, зданий: %d)" % [int(city.get("width", 0)), int(city.get("height", 0)), city.get("buildings", []).size()])
+	var big := 0
+	for bd in city.get("buildings", []):
+		if int(bd["w"]) * int(bd["h"]) > 1:
+			big += 1
+	check(big > 10, "в городе есть здания крупнее 1×1: %d" % big)
+	var spot := _find_rect(city, 2, 1, ["r", "c"])
+	check(spot.x >= 0, "найдено место 2×1 под магазин")
+	var buy: String = client.send_command("map.buy_cells", {"company_id": cid, "city_id": "ufa", "x": spot.x, "y": spot.y, "w": 2, "h": 1})
 	await wait_until(func(): return results.has(buy), 3.0)
-	check(results.get(buy, {}).get("ok", false) == true, "участок куплен")
-
-	var ind := {}
-	for l in city.get("lots", []):
-		if l["zone"] == "industrial" and l["for_sale"]:
-			ind = l
-			break
-	var buy2: String = client.send_command("map.buy_lot", {"company_id": cid, "lot_id": ind["id"]})
-	await wait_until(func(): return results.has(buy2), 3.0)
-	var early: String = client.send_command("enterprise.create", {"company_id": cid, "kind": "shop", "name": "Не там", "lot_id": ind["id"]})
+	check(results.get(buy, {}).get("ok", false) == true, "клетки куплены")
+	var early: String = client.send_command("building.place", {"company_id": cid, "city_id": "ufa", "x": spot.x, "y": spot.y, "kind": "farm", "name": "Не там"})
 	await wait_until(func(): return results.has(early), 3.0)
-	check(results.get(early, {}).get("error", {}).get("code", "") == "zoning_violation", "зонирование: магазин в промзоне отклонён")
-	var built: String = client.send_command("enterprise.create", {"company_id": cid, "kind": "farm", "name": "Ферма Godot", "lot_id": ind["id"]})
+	check(results.get(early, {}).get("error", {}).get("code", "") == "cells_not_owned" or results.get(early, {}).get("error", {}).get("code", "") == "zoning_violation", "ферма на чужих/неподходящих клетках отклонена")
+	var built: String = client.send_command("building.place", {"company_id": cid, "city_id": "ufa", "x": spot.x, "y": spot.y, "kind": "shop", "name": "Магазин Godot"})
 	await wait_until(func(): return results.has(built), 3.0)
-	check(results.get(built, {}).get("ok", false) == true, "ферма построена на участке")
+	check(results.get(built, {}).get("ok", false) == true, "магазин 2×1 построен")
 	var mapq2: String = client.send_command("map.get_city", {"city_id": "ufa"})
 	await wait_until(func(): return results.has(mapq2), 3.0)
 	var shown := false
-	for l in results[mapq2]["result"]["city"]["lots"]:
-		if l["id"] == ind["id"] and l["building"] != null and l["building"]["kind"] == "farm":
+	for bd in results[mapq2]["result"]["city"]["buildings"]:
+		if int(bd["x"]) == spot.x and int(bd["y"]) == spot.y and bd["kind"] == "shop" and int(bd["w"]) == 2 and int(bd["h"]) == 1:
 			shown = true
-	check(shown, "здание видно в map.get_city")
+	check(shown, "здание 2×1 видно в map.get_city")
 
 	print("3. reconnect")
 	var old_session: String = client.session_id

@@ -7,8 +7,6 @@
 | Набор | Страница | Использованные файлы |
 |---|---|---|
 | Isometric Landscape | https://opengameart.org/content/isometric-landscape | `landscapeTiles_067` → `ground_grass`, `_066` → `water`, `_081` → `road` и `bridge` (плоский асфальт) |
-| Isometric City | https://opengameart.org/content/isometric-city | `cityTiles_067` → `park_tree`, `cityTiles_072` → `lot_empty` (размеченный пустырь) |
-| Isometric Buildings #1 | https://opengameart.org/content/isometric-buildings-1 | `buildingTiles_NNN` → `buildings/bNNN.png` (60 шт.) |
+| Isometric City | https://opengameart.org/content/isometric-city | `cityTiles_067` → `park_tree` |
 
-Размер тайла: 132×99 px (ромб 132×66 + толщина 33). Здания — той же ширины, высота до ~130 px.
-Это временный стиль-заглушка: здания декоративны (городская застройка), игровых зданий игроков пока нет.
+Размер клетки: 132×99 px (ромб 132×66 + толщина 33). Здания рисуются кодом по габаритам W×H клеток (`scripts/map/city_map_view.gd`), спрайты зданий Kenney больше не используются.

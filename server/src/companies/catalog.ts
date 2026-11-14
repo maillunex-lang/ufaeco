@@ -30,11 +30,22 @@ export const ENTERPRISE_ZONES: Record<EnterpriseKind, readonly string[]> = {
   construction_office: ['commercial'],
 };
 
+/** Габариты здания в клетках (до поворота). Размеры — гипотезы, точные размеры из оригинала [K] сверить. */
+export const ENTERPRISE_FOOTPRINT: Record<EnterpriseKind, { w: number; h: number }> = {
+  farm: { w: 4, h: 3 },
+  elevator: { w: 3, h: 3 },
+  mill: { w: 3, h: 2 },
+  bakery: { w: 2, h: 2 },
+  shop: { w: 2, h: 1 },
+  construction_office: { w: 2, h: 2 },
+};
+
 /** Каталог для клиента: что можно строить, сколько стоит и где. Параметры производства появятся с этапами 5–7. */
 export const catalogView = () => ({
   enterprise_kinds: (Object.keys(ENTERPRISE_KINDS) as EnterpriseKind[]).map((k) => ({
     kind: k,
     cost_cents: ENTERPRISE_KINDS[k],
     zones: ENTERPRISE_ZONES[k],
+    footprint: ENTERPRISE_FOOTPRINT[k],
   })),
 });

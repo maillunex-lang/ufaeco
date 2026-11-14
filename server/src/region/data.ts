@@ -26,7 +26,7 @@ const citySchema = z.strictObject({
   plan: z.strictObject({
     width: z.number().int().min(24).max(160),
     height: z.number().int().min(24).max(160),
-    target_lots: z.number().int().min(4).max(600),
+    target_buildings: z.number().int().min(10).max(1500),
     river: z.boolean(),
     seed: z.number().int().min(0),
   }),

@@ -73,14 +73,24 @@ export const commandArgSchemas = {
   }),
   'city.get_stats': z.strictObject({ city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/), months: z.number().int().min(1).max(60).optional() }),
   'map.get_city': z.strictObject({ city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/) }),
-  'map.buy_lot': z.strictObject({ company_id: uuid, lot_id: z.string().regex(/^[a-z0-9_-]{1,64}$/) }),
-  'enterprise.create': z.strictObject({
+  'map.buy_cells': z.strictObject({
     company_id: uuid,
-    kind: z.enum(ENTERPRISE_KIND_IDS),
-    name: companyName,
-    /** Участок карты; без него предприятие создаётся без привязки к карте (устаревший режим). */
-    lot_id: z.string().regex(/^[a-z0-9_-]{1,64}$/).optional(),
+    city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+    x: z.number().int().min(0).max(400),
+    y: z.number().int().min(0).max(400),
+    w: z.number().int().min(1).max(40),
+    h: z.number().int().min(1).max(40),
   }),
+  'building.place': z.strictObject({
+    company_id: uuid,
+    city_id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
+    x: z.number().int().min(0).max(400),
+    y: z.number().int().min(0).max(400),
+    kind: z.enum(ENTERPRISE_KIND_IDS),
+    rotated: z.boolean().optional(),
+    name: companyName,
+  }),
+  'building.demolish': z.strictObject({ building_id: uuid }),
 } as const;
 export type CommandName = keyof typeof commandArgSchemas;
 

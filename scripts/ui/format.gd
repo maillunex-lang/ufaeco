@@ -90,3 +90,20 @@ static func tags(list: Array) -> String:
 	for t in list:
 		out.append(TAG_RU.get(t, str(t)))
 	return ", ".join(out)
+
+const NPC_KIND_RU := {
+	"house": "дом", "cottage": "коттедж", "block": "жилой дом", "tower": "жилая башня",
+	"kiosk": "киоск", "shop_row": "торговый ряд", "mall": "торговый центр", "office": "офисное здание",
+	"shed": "сарай", "depot": "депо", "workshop": "мастерская", "warehouse": "склад", "plant": "завод",
+}
+
+const ZONE_LETTER := {"r": "residential", "c": "commercial", "i": "industrial", "p": "park"}
+
+static func npc_kind(k: String) -> String:
+	return NPC_KIND_RU.get(k, k)
+
+static func zone_by_letter(letter: String) -> String:
+	return ZONE_LETTER.get(letter, "")
+
+static func zone_by_letter_ru(letter: String) -> String:
+	return zone(zone_by_letter(letter))

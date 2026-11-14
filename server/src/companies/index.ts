@@ -129,20 +129,23 @@ export class CompanyService {
 
   // ---- предприятия
 
-  async createEnterprise(tx: Queryable, playerId: string, companyId: string, kind: EnterpriseKind, name: string, lotId: string | null = null) {
+  async createEnterprise(tx: Queryable, playerId: string, companyId: string, kind: EnterpriseKind, name: string, buildingId: string | null = null) {
     this.assertActive(await this.getOwned(tx, playerId, companyId, true)); // FOR UPDATE: сериализует списания компании
     let id: string;
     try {
-      id = (await tx.query<{ id: string }>('INSERT INTO enterprises (company_id, kind, name, lot_id) VALUES ($1,$2,$3,$4) RETURNING id', [companyId, kind, name, lotId])).rows[0]!.id;
+      id = (await tx.query<{ id: string }>('INSERT INTO enterprises (company_id, kind, name, building_id) VALUES ($1,$2,$3,$4) RETURNING id', [companyId, kind, name, buildingId])).rows[0]!.id;
     } catch (e) {
-      return unique(e, 'enterprise_name_taken', { enterprises_lot_key: 'lot_occupied' });
+      return unique(e, 'enterprise_name_taken');
     }
-    const balance = await this.debit(tx, companyId, ENTERPRISE_KINDS[kind], 'enterprise_created', playerId, { enterprise_id: id, kind, name, lot_id: lotId });
-    return { id, company_id: companyId, kind, name, lot_id: lotId, cost_cents: ENTERPRISE_KINDS[kind], balance_cents: balance };
+    const balance = await this.debit(tx, companyId, ENTERPRISE_KINDS[kind], 'enterprise_created', playerId, { enterprise_id: id, kind, name, building_id: buildingId });
+    return { id, company_id: companyId, kind, name, building_id: buildingId, cost_cents: ENTERPRISE_KINDS[kind], balance_cents: balance };
   }
 
   async enterprises(tx: Queryable, companyId: string) {
-    const r = await tx.query<{ id: string; kind: string; name: string; lot_id: string | null }>('SELECT id, kind, name, lot_id FROM enterprises WHERE company_id = $1 ORDER BY seq', [companyId]);
+    const r = await tx.query<{ id: string; kind: string; name: string; building_id: string | null; city_id: string | null; x: number | null; y: number | null }>(
+      `SELECT e.id, e.kind, e.name, e.building_id, b.city_id, b.x, b.y FROM enterprises e LEFT JOIN buildings b ON b.id = e.building_id WHERE e.company_id = $1 ORDER BY e.seq`,
+      [companyId],
+    );
     return r.rows;
   }
 }

@@ -105,4 +105,4 @@ npm test
 
 ## Графика
 
-Изометрические спрайты — Kenney (CC0), см. [assets/art/iso/CREDITS.md](assets/art/iso/CREDITS.md). Референсы стиля — `assets/art/reference/`.
+Изометрические тайлы земли/дорог/воды — Kenney (CC0), здания рисуются кодом по габаритам клеток; см. [assets/art/iso/CREDITS.md](assets/art/iso/CREDITS.md). Референсы стиля — `assets/art/reference/`.

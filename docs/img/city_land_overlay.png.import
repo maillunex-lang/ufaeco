@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://sqi1c5iyq3l6"
-path="res://.godot/imported/b018.png-a4dcd13ae1197436ca5b9284e876dc81.ctex"
+uid="uid://dknthqexlios6"
+path="res://.godot/imported/city_land_overlay.png-d4ed4eb8d8041c89109fb0304b872029.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/iso/buildings/b018.png"
-dest_files=["res://.godot/imported/b018.png-a4dcd13ae1197436ca5b9284e876dc81.ctex"]
+source_file="res://docs/img/city_land_overlay.png"
+dest_files=["res://.godot/imported/city_land_overlay.png-d4ed4eb8d8041c89109fb0304b872029.ctex"]
 
 [params]
 
@@ -21,7 +21,7 @@ compress/lossy_quality=0.7
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
