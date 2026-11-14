@@ -1,7 +1,8 @@
 # БАШЭКО Online
 
 Онлайн-экономическая игра для Android (Godot 4) с действием в Республике Башкортостан.
-Дорожная карта — [ROADMAP.md](ROADMAP.md), архитектура — [docs/GAME_ARCHITECTURE.md](docs/GAME_ARCHITECTURE.md),
+Дорожная карта — [ROADMAP.md](ROADMAP.md), механики Capitalism 2 и их адаптация — [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md),
+игровое время — [docs/TIME_MODEL.md](docs/TIME_MODEL.md), архитектура — [docs/GAME_ARCHITECTURE.md](docs/GAME_ARCHITECTURE.md),
 протокол — [protocol/README.md](protocol/README.md).
 
 Сервер — авторитетный: клиент отправляет только намерения, деньги, товары и собственность определяет сервер.
