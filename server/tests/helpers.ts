@@ -119,6 +119,18 @@ export class TestClient {
     return this.waitType('auth_ok');
   }
 
+  async register(login: string, password = 'correct-horse-1', displayName?: string): Promise<Msg> {
+    await this.waitType('hello');
+    this.send('register', { client_name: 'vitest', client_version: '0.0.1', login, password, ...(displayName ? { display_name: displayName } : {}) });
+    return this.waitFor((m) => m.type === 'auth_ok' || m.type === 'error');
+  }
+
+  async login(login: string, password = 'correct-horse-1'): Promise<Msg> {
+    await this.waitType('hello');
+    this.send('login', { client_name: 'vitest', client_version: '0.0.1', login, password });
+    return this.waitFor((m) => m.type === 'auth_ok' || m.type === 'error');
+  }
+
   command(name: string, args: Record<string, unknown>, requestId: string = randomUUID()) {
     const before = new Set(this.messages);
     this.send('command', { name, args }, { request_id: requestId });

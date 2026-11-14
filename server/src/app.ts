@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { AddressInfo } from 'node:net';
 import type { ServerConfig } from './config.js';
 import { AccountService } from './accounts/index.js';
+import { CompanyService } from './companies/index.js';
 import { Gateway } from './net/gateway.js';
 import { createPool, type Db } from './persistence/db.js';
 import { runMigrations } from './persistence/migrate.js';
@@ -24,7 +25,7 @@ export function createGameServer(config: ServerConfig, opts: { db?: Db } = {}): 
   const http = Fastify({ logger: config.environment !== 'test' });
   let gateway: Gateway;
   const world = new World(config.tickRate, config.snapshotRate, (s) => gateway.broadcastSnapshot(s));
-  gateway = new Gateway(config, db, accounts, sessions, world);
+  gateway = new Gateway(config, db, accounts, sessions, world, new CompanyService());
   let sweeper: NodeJS.Timeout | undefined;
 
   http.get('/health', async () => {

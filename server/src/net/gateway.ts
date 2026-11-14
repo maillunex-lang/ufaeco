@@ -18,11 +18,23 @@ import { withTransaction } from '../persistence/db.js';
 import { writeAudit } from '../persistence/audit.js';
 import { executeOnce, hashRequest } from '../persistence/idempotency.js';
 import { RateLimiter } from '../security/rate-limiter.js';
-import type { AccountService } from '../accounts/index.js';
+import type { AccountService, Player } from '../accounts/index.js';
+import { commandHandlers, type Services } from '../commands/registry.js';
+import { DomainError } from '../errors.js';
+import { LoginGuard } from '../security/login-guard.js';
 import type { SessionService } from '../sessions/index.js';
 import type { World, WorldSnapshot } from '../world/index.js';
+import type { CompanyService } from '../companies/index.js';
 
 const MAX_RATE_VIOLATIONS = 5;
+
+interface PasswordAuth {
+  client_name: string;
+  client_version: string;
+  login: string;
+  password: string;
+  display_name?: string;
+}
 
 interface Conn {
   ws: WebSocket;
@@ -41,6 +53,8 @@ export class Gateway {
   private readonly conns = new Set<Conn>();
   private readonly bySession = new Map<string, Conn>();
   private heartbeatTimer?: NodeJS.Timeout;
+  private readonly loginGuard = new LoginGuard();
+  private readonly services: Services;
 
   constructor(
     private readonly cfg: ServerConfig,
@@ -48,7 +62,9 @@ export class Gateway {
     private readonly accounts: AccountService,
     private readonly sessions: SessionService,
     private readonly world: World,
+    private readonly companies: CompanyService,
   ) {
+    this.services = { accounts, companies, world };
     this.wss = new WebSocketServer({ noServer: true, maxPayload: cfg.maxMessageSize });
     this.wss.on('connection', (ws) => this.onConnection(ws));
   }
@@ -216,6 +232,10 @@ export class Gateway {
       }
       case 'auth':
         return this.handleAuth(conn, payload.data as { client_name: string; client_version: string; display_name?: string });
+      case 'register':
+        return this.handlePasswordAuth(conn, 'register', payload.data as PasswordAuth);
+      case 'login':
+        return this.handlePasswordAuth(conn, 'login', payload.data as PasswordAuth);
       case 'reconnect':
         return this.handleReconnect(conn, payload.data as { session_id: string; resume_token: string });
       case 'disconnect':
@@ -274,6 +294,38 @@ export class Gateway {
       token: res.s.token,
       resumed: false,
     });
+  }
+
+  private async handlePasswordAuth(conn: Conn, mode: 'register' | 'login', p: PasswordAuth): Promise<void> {
+    if (conn.auth) return this.sendError(conn, 'already_authenticated');
+    if (mode === 'login' && this.loginGuard.isLocked(p.login)) {
+      await writeAudit(this.db, { eventType: 'login_locked', details: { login: p.login } });
+      return this.sendError(conn, 'account_locked');
+    }
+    let result: { player: Player; s: { sessionId: string; token: string } } | null;
+    try {
+      result = await withTransaction(this.db, async (tx) => {
+        const player =
+          mode === 'register'
+            ? await this.accounts.register(tx, p.login, p.password, p.display_name)
+            : await this.accounts.authenticate(tx, p.login, p.password);
+        if (!player) return null;
+        const s = await this.sessions.create(tx, player.id, { client_name: p.client_name, client_version: p.client_version });
+        await writeAudit(tx, { playerId: player.id, sessionId: s.sessionId, eventType: mode === 'register' ? 'account_registered' : 'login_ok', details: { login: p.login } });
+        return { player, s };
+      });
+    } catch (e) {
+      if (e instanceof DomainError) return this.sendError(conn, e.code);
+      throw e;
+    }
+    if (!result) {
+      this.loginGuard.recordFailure(p.login);
+      // журнал неудачи записан в откатываемой транзакции → пишем отдельно
+      await writeAudit(this.db, { eventType: 'login_failed', details: { login: p.login } });
+      return this.sendError(conn, 'invalid_credentials');
+    }
+    this.loginGuard.recordSuccess(p.login);
+    this.bindAuthenticated(conn, { playerId: result.player.id, sessionId: result.s.sessionId, displayName: result.player.displayName, token: result.s.token, resumed: false });
   }
 
   private async handleReconnect(conn: Conn, p: { session_id: string; resume_token: string }): Promise<void> {
@@ -346,20 +398,32 @@ export class Gateway {
     const args = commandArgSchemas[name].safeParse(p.args);
     if (!args.success) return reject('invalid_payload');
 
-    const outcome = await executeOnce(
-      this.db,
-      { playerId: a.playerId, requestId, commandName: name, requestHash: hashRequest(name, args.data) },
-      async (tx) => {
-        const result = await this.runCommand(tx, conn, name, args.data as Record<string, unknown>);
-        await writeAudit(tx, {
-          playerId: a.playerId,
-          sessionId: a.sessionId,
-          eventType: 'command_executed',
-          details: { command: name, request_id: requestId },
-        });
-        return { ok: true, result };
-      },
-    );
+    const hooks: (() => void)[] = [];
+    let outcome;
+    try {
+      outcome = await executeOnce(
+        this.db,
+        { playerId: a.playerId, requestId, commandName: name, requestHash: hashRequest(name, args.data) },
+        async (tx) => {
+          const result = await commandHandlers[name](
+            { tx, playerId: a.playerId, services: this.services, afterCommit: (fn) => hooks.push(fn) },
+            args.data as Record<string, unknown>,
+          );
+          await writeAudit(tx, {
+            playerId: a.playerId,
+            sessionId: a.sessionId,
+            eventType: 'command_executed',
+            details: { command: name, request_id: requestId },
+          });
+          return { ok: true, result };
+        },
+      );
+    } catch (e) {
+      // бизнес-ошибка: транзакция откатилась, request_id не потрачен
+      if (e instanceof DomainError) return reject(e.code);
+      throw e;
+    }
+    hooks.forEach((fn) => fn());
 
     if (outcome.kind === 'conflict') return this.sendError(conn, 'request_id_conflict', requestId);
     this.send(conn, 'command_result', {
@@ -369,22 +433,4 @@ export class Gateway {
       result: (outcome.response.result as Record<string, unknown> | undefined) ?? {},
     }, requestId);
   }
-
-  private async runCommand(tx: Queryable, conn: Conn, name: CommandName, args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const a = conn.auth!;
-    switch (name) {
-      case 'session.get_profile': {
-        const player = await this.accounts.getPlayer(tx, a.playerId);
-        return { player_id: a.playerId, display_name: player?.displayName ?? a.displayName };
-      }
-      case 'session.set_display_name': {
-        const newName = (args as { display_name: string }).display_name;
-        await this.accounts.setDisplayName(tx, a.playerId, newName);
-        a.displayName = newName;
-        this.world.rename(a.playerId, newName);
-        return { player_id: a.playerId, display_name: newName };
-      }
-    }
-  }
 }
-

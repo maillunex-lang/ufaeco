@@ -1,9 +1,33 @@
 {
   "protocol_version": 1,
   "websocket_path": "/ws",
-  "client_to_server": ["auth", "reconnect", "heartbeat", "command", "disconnect"],
-  "server_to_client": ["hello", "auth_ok", "heartbeat", "world_snapshot", "command_result", "error", "disconnect"],
-  "commands": ["session.get_profile", "session.set_display_name"],
+  "client_to_server": [
+    "auth",
+    "register",
+    "login",
+    "reconnect",
+    "heartbeat",
+    "command",
+    "disconnect"
+  ],
+  "server_to_client": [
+    "hello",
+    "auth_ok",
+    "heartbeat",
+    "world_snapshot",
+    "command_result",
+    "error",
+    "disconnect"
+  ],
+  "commands": [
+    "session.get_profile",
+    "session.set_display_name",
+    "company.create",
+    "company.list",
+    "company.get",
+    "company.journal",
+    "enterprise.create"
+  ],
   "error_codes": [
     "invalid_message",
     "unsupported_protocol_version",
@@ -19,12 +43,36 @@
     "request_id_conflict",
     "rate_limited",
     "message_too_large",
-    "internal_error"
+    "internal_error",
+    "invalid_credentials",
+    "login_taken",
+    "account_locked",
+    "forbidden",
+    "not_found",
+    "insufficient_funds",
+    "limit_reached",
+    "company_name_taken",
+    "enterprise_name_taken",
+    "unknown_product",
+    "insufficient_inventory"
   ],
-  "disconnect_reasons": ["client_closing", "replaced_by_new_connection", "heartbeat_timeout", "rate_limited", "protocol_error", "server_shutdown"],
+  "disconnect_reasons": [
+    "client_closing",
+    "replaced_by_new_connection",
+    "heartbeat_timeout",
+    "rate_limited",
+    "protocol_error",
+    "server_shutdown"
+  ],
   "limits": {
     "display_name_min": 2,
     "display_name_max": 32,
-    "auth_timeout_ms": 10000
+    "auth_timeout_ms": 10000,
+    "login_min": 3,
+    "login_max": 24,
+    "password_min": 8,
+    "password_max": 128,
+    "company_name_min": 2,
+    "company_name_max": 64
   }
 }
