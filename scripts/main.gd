@@ -18,6 +18,7 @@ var _bootstrapped := false
 
 
 func _ready() -> void:
+	RenderingServer.set_default_clear_color(BashPalette.GREEN_DEEP.lerp(BashPalette.MINT, 0.55))
 	var ui := get_node("Hud/UI") as Control
 	ui.theme = BashTheme.build()
 	map_view = MAP_VIEW.new()

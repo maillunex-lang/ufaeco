@@ -89,3 +89,7 @@ npm test
 ## Ограничения
 
 Это локальный прототип серверного каркаса (этап 1). Production, VPS и публикация APK не настроены.
+
+## Графика
+
+Изометрические спрайты — Kenney (CC0), см. [assets/art/iso/CREDITS.md](assets/art/iso/CREDITS.md). Референсы стиля — `assets/art/reference/`.

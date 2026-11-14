@@ -36,13 +36,11 @@ func _initialize() -> void:
 	var target: Dictionary = {}
 	var best := 1e9
 	for l in mv.city["lots"]:
-		var sp: Vector2 = mv.position + (Vector2(float(l["x"]) + 1.0, float(l["y"]) + 1.0)) * mv.TILE * mv.scale.x
-		var d := sp.distance_to(Vector2(560, 380))
+		var d: float = mv.lot_screen_center(l).distance_to(Vector2(560, 380))
 		if d < best:
 			best = d
 			target = l
-	var local: Vector2 = (Vector2(float(target["x"]) + 0.5, float(target["y"]) + 0.5)) * mv.TILE
-	var screen: Vector2 = mv.position + local * mv.scale.x
+	var screen: Vector2 = mv.lot_screen_center(target)
 	var tp := InputEventMouseButton.new()
 	tp.button_index = MOUSE_BUTTON_LEFT; tp.pressed = true; tp.position = screen
 	Input.parse_input_event(tp)
