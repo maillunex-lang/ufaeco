@@ -48,7 +48,11 @@ npm test
 2. Адрес сервера — `config/client_config.json` (`websocket_url`) или переменная окружения `BASHECO_WEBSOCKET_URL`.
    Для Android-эмулятора вместо `127.0.0.1` используйте `10.0.2.2`.
 3. Запустите сцену `scenes/main.tscn`: в шапке отображаются статус соединения и `server_tick`, ошибки сети — по-русски.
-4. При экспорте в Android добавьте `*.json` в фильтр ресурсов экспорта (Export → Resources → Filters to export non-resource files),
+4. Автопроверка клиента против запущенного сервера (Godot 4.3, без окна):
+   ```bash
+   godot --headless --path . --script res://tests/godot/net_check.gd
+   ```
+5. При экспорте в Android добавьте `*.json` в фильтр ресурсов экспорта (Export → Resources → Filters to export non-resource files),
    иначе `config/client_config.json` и `protocol/protocol.json` не попадут в APK.
 
 ## Переменные конфигурации сервера
