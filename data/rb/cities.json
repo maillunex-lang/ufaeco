@@ -1,0 +1,460 @@
+{
+ "approximate": true,
+ "note": "Население (перепись 2021, округлено), зарплаты и цены на землю — ориентировочные гипотезы ±15–30%; перед релизом сверить с Башстатом и открытыми данными. Координаты округлены до 0,001°.",
+ "cities": [
+  {
+   "id": "ufa",
+   "name": "Уфа",
+   "lat": 54.735,
+   "lon": 55.958,
+   "population": 1145000,
+   "wage_rub": 72000,
+   "land_base_cents_per_tile": 2500000,
+   "farmland_index": 0.55,
+   "specialization": [
+    "oil_refining",
+    "machinery",
+    "services",
+    "education"
+   ],
+   "plan": {
+    "width": 84,
+    "height": 64,
+    "target_lots": 140,
+    "river": true,
+    "seed": 20241114
+   }
+  },
+  {
+   "id": "sterlitamak",
+   "name": "Стерлитамак",
+   "lat": 53.63,
+   "lon": 55.95,
+   "population": 280000,
+   "wage_rub": 58000,
+   "land_base_cents_per_tile": 1500000,
+   "farmland_index": 0.55,
+   "specialization": [
+    "chemicals",
+    "soda",
+    "machinery"
+   ],
+   "plan": {
+    "width": 64,
+    "height": 48,
+    "target_lots": 80,
+    "river": true,
+    "seed": 1101
+   }
+  },
+  {
+   "id": "salavat",
+   "name": "Салават",
+   "lat": 53.362,
+   "lon": 55.925,
+   "population": 157000,
+   "wage_rub": 62000,
+   "land_base_cents_per_tile": 1200000,
+   "farmland_index": 0.5,
+   "specialization": [
+    "petrochemicals",
+    "gas_processing"
+   ],
+   "plan": {
+    "width": 56,
+    "height": 44,
+    "target_lots": 60,
+    "river": true,
+    "seed": 1102
+   }
+  },
+  {
+   "id": "neftekamsk",
+   "name": "Нефтекамск",
+   "lat": 56.092,
+   "lon": 54.248,
+   "population": 134000,
+   "wage_rub": 56000,
+   "land_base_cents_per_tile": 1100000,
+   "farmland_index": 0.7,
+   "specialization": [
+    "trucks",
+    "machinery",
+    "oil"
+   ],
+   "plan": {
+    "width": 56,
+    "height": 44,
+    "target_lots": 55,
+    "river": true,
+    "seed": 1103
+   }
+  },
+  {
+   "id": "oktyabrsky",
+   "name": "Октябрьский",
+   "lat": 54.481,
+   "lon": 53.466,
+   "population": 111000,
+   "wage_rub": 56000,
+   "land_base_cents_per_tile": 1000000,
+   "farmland_index": 0.75,
+   "specialization": [
+    "oil_services",
+    "machinery"
+   ],
+   "plan": {
+    "width": 52,
+    "height": 40,
+    "target_lots": 50,
+    "river": false,
+    "seed": 1104
+   }
+  },
+  {
+   "id": "ishimbay",
+   "name": "Ишимбай",
+   "lat": 53.455,
+   "lon": 56.044,
+   "population": 62000,
+   "wage_rub": 52000,
+   "land_base_cents_per_tile": 700000,
+   "farmland_index": 0.5,
+   "specialization": [
+    "oil",
+    "machinery"
+   ],
+   "plan": {
+    "width": 44,
+    "height": 34,
+    "target_lots": 32,
+    "river": true,
+    "seed": 1105
+   }
+  },
+  {
+   "id": "beloretsk",
+   "name": "Белорецк",
+   "lat": 53.968,
+   "lon": 58.4,
+   "population": 62000,
+   "wage_rub": 55000,
+   "land_base_cents_per_tile": 650000,
+   "farmland_index": 0.15,
+   "specialization": [
+    "metallurgy",
+    "timber",
+    "tourism"
+   ],
+   "plan": {
+    "width": 44,
+    "height": 34,
+    "target_lots": 32,
+    "river": true,
+    "seed": 1106
+   }
+  },
+  {
+   "id": "kumertau",
+   "name": "Кумертау",
+   "lat": 52.77,
+   "lon": 55.784,
+   "population": 62000,
+   "wage_rub": 50000,
+   "land_base_cents_per_tile": 650000,
+   "farmland_index": 0.5,
+   "specialization": [
+    "aviation",
+    "machinery",
+    "brown_coal"
+   ],
+   "plan": {
+    "width": 44,
+    "height": 34,
+    "target_lots": 32,
+    "river": false,
+    "seed": 1107
+   }
+  },
+  {
+   "id": "sibay",
+   "name": "Сибай",
+   "lat": 52.717,
+   "lon": 58.666,
+   "population": 60000,
+   "wage_rub": 70000,
+   "land_base_cents_per_tile": 700000,
+   "farmland_index": 0.25,
+   "specialization": [
+    "copper_zinc",
+    "mining"
+   ],
+   "plan": {
+    "width": 44,
+    "height": 34,
+    "target_lots": 30,
+    "river": false,
+    "seed": 1108
+   }
+  },
+  {
+   "id": "tuymazy",
+   "name": "Туймазы",
+   "lat": 54.599,
+   "lon": 53.704,
+   "population": 68000,
+   "wage_rub": 50000,
+   "land_base_cents_per_tile": 700000,
+   "farmland_index": 0.8,
+   "specialization": [
+    "oil",
+    "agro",
+    "machinery"
+   ],
+   "plan": {
+    "width": 44,
+    "height": 34,
+    "target_lots": 34,
+    "river": false,
+    "seed": 1109
+   }
+  },
+  {
+   "id": "meleuz",
+   "name": "Мелеуз",
+   "lat": 52.959,
+   "lon": 55.934,
+   "population": 61000,
+   "wage_rub": 48000,
+   "land_base_cents_per_tile": 600000,
+   "farmland_index": 0.6,
+   "specialization": [
+    "food",
+    "machinery",
+    "glass"
+   ],
+   "plan": {
+    "width": 44,
+    "height": 34,
+    "target_lots": 30,
+    "river": true,
+    "seed": 1110
+   }
+  },
+  {
+   "id": "belebey",
+   "name": "Белебей",
+   "lat": 54.123,
+   "lon": 54.13,
+   "population": 60000,
+   "wage_rub": 47000,
+   "land_base_cents_per_tile": 550000,
+   "farmland_index": 0.85,
+   "specialization": [
+    "agro",
+    "machinery",
+    "food"
+   ],
+   "plan": {
+    "width": 44,
+    "height": 34,
+    "target_lots": 30,
+    "river": false,
+    "seed": 1111
+   }
+  },
+  {
+   "id": "birsk",
+   "name": "Бирск",
+   "lat": 55.416,
+   "lon": 55.544,
+   "population": 44000,
+   "wage_rub": 45000,
+   "land_base_cents_per_tile": 500000,
+   "farmland_index": 0.8,
+   "specialization": [
+    "agro",
+    "food",
+    "light_industry"
+   ],
+   "plan": {
+    "width": 40,
+    "height": 32,
+    "target_lots": 26,
+    "river": true,
+    "seed": 1112
+   }
+  },
+  {
+   "id": "uchaly",
+   "name": "Учалы",
+   "lat": 54.314,
+   "lon": 59.411,
+   "population": 36000,
+   "wage_rub": 78000,
+   "land_base_cents_per_tile": 550000,
+   "farmland_index": 0.2,
+   "specialization": [
+    "copper",
+    "mining"
+   ],
+   "plan": {
+    "width": 40,
+    "height": 32,
+    "target_lots": 24,
+    "river": false,
+    "seed": 1113
+   }
+  },
+  {
+   "id": "blagoveshchensk",
+   "name": "Благовещенск",
+   "lat": 55.049,
+   "lon": 55.955,
+   "population": 35000,
+   "wage_rub": 48000,
+   "land_base_cents_per_tile": 500000,
+   "farmland_index": 0.65,
+   "specialization": [
+    "chemicals",
+    "machinery"
+   ],
+   "plan": {
+    "width": 40,
+    "height": 32,
+    "target_lots": 24,
+    "river": true,
+    "seed": 1114
+   }
+  },
+  {
+   "id": "dyurtyuli",
+   "name": "Дюртюли",
+   "lat": 55.485,
+   "lon": 54.852,
+   "population": 31000,
+   "wage_rub": 44000,
+   "land_base_cents_per_tile": 450000,
+   "farmland_index": 0.85,
+   "specialization": [
+    "agro",
+    "food"
+   ],
+   "plan": {
+    "width": 40,
+    "height": 32,
+    "target_lots": 22,
+    "river": false,
+    "seed": 1115
+   }
+  },
+  {
+   "id": "davlekanovo",
+   "name": "Давлеканово",
+   "lat": 54.222,
+   "lon": 55.031,
+   "population": 25000,
+   "wage_rub": 43000,
+   "land_base_cents_per_tile": 400000,
+   "farmland_index": 0.9,
+   "specialization": [
+    "agro",
+    "grain",
+    "food"
+   ],
+   "plan": {
+    "width": 36,
+    "height": 28,
+    "target_lots": 20,
+    "river": false,
+    "seed": 1116
+   }
+  },
+  {
+   "id": "baymak",
+   "name": "Баймак",
+   "lat": 52.59,
+   "lon": 58.315,
+   "population": 17000,
+   "wage_rub": 52000,
+   "land_base_cents_per_tile": 350000,
+   "farmland_index": 0.35,
+   "specialization": [
+    "copper_zinc",
+    "gold",
+    "agro"
+   ],
+   "plan": {
+    "width": 36,
+    "height": 28,
+    "target_lots": 18,
+    "river": false,
+    "seed": 1117
+   }
+  },
+  {
+   "id": "agidel",
+   "name": "Агидель",
+   "lat": 55.9,
+   "lon": 53.93,
+   "population": 16000,
+   "wage_rub": 46000,
+   "land_base_cents_per_tile": 350000,
+   "farmland_index": 0.7,
+   "specialization": [
+    "power",
+    "light_industry"
+   ],
+   "plan": {
+    "width": 36,
+    "height": 28,
+    "target_lots": 16,
+    "river": true,
+    "seed": 1118
+   }
+  },
+  {
+   "id": "yanaul",
+   "name": "Янаул",
+   "lat": 56.263,
+   "lon": 54.931,
+   "population": 9500,
+   "wage_rub": 44000,
+   "land_base_cents_per_tile": 300000,
+   "farmland_index": 0.75,
+   "specialization": [
+    "oil",
+    "agro"
+   ],
+   "plan": {
+    "width": 36,
+    "height": 28,
+    "target_lots": 14,
+    "river": false,
+    "seed": 1119
+   }
+  },
+  {
+   "id": "chishmy",
+   "name": "Чишмы",
+   "lat": 54.583,
+   "lon": 55.383,
+   "population": 8000,
+   "wage_rub": 42000,
+   "land_base_cents_per_tile": 300000,
+   "farmland_index": 0.8,
+   "specialization": [
+    "rail_hub",
+    "sugar",
+    "agro"
+   ],
+   "plan": {
+    "width": 36,
+    "height": 28,
+    "target_lots": 14,
+    "river": false,
+    "seed": 1120
+   }
+  }
+ ]
+}

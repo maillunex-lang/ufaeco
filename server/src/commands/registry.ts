@@ -3,14 +3,17 @@ import type { CompanyService } from '../companies/index.js';
 import { ENTERPRISE_KINDS } from '../companies/catalog.js';
 import type { Queryable } from '../persistence/db.js';
 import type { CommandName } from '../protocol/schemas.js';
+import { DomainError } from '../errors.js';
 import { catalogView } from '../companies/catalog.js';
 import type { MapService } from '../world_map/service.js';
+import type { RegionService } from '../region/service.js';
 import type { World } from '../world/index.js';
 
 export interface Services {
   accounts: AccountService;
   companies: CompanyService;
   map: MapService;
+  region: RegionService;
   world: World;
 }
 
@@ -75,4 +78,20 @@ export const commandHandlers: Record<CommandName, Handler> = {
   'map.buy_lot': async ({ tx, playerId, services }, args) => ({
     purchase: await services.map.buyLot(tx, playerId, args.company_id, args.lot_id),
   }),
+
+  'region.get': async ({ tx, services }) => ({ region: await services.region.getRegion(tx) }),
+
+  'region.freight_quote': async ({ services }, args) => {
+    try {
+      return { quote: services.region.network.quote(args.from_city, args.to_city, args.tonnes ?? 1) };
+    } catch {
+      throw new DomainError('not_found');
+    }
+  },
+
+  'city.get_stats': async ({ tx, services }, args) => {
+    const stats = await services.region.cityStats(tx, args.city_id, args.months ?? 24);
+    if (!stats) throw new DomainError('not_found');
+    return { stats };
+  },
 };

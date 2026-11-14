@@ -14,6 +14,7 @@
 | `server/` | Backend: TypeScript, Node.js, Fastify, `ws`, PostgreSQL (`pg`), Zod, Vitest |
 | `protocol/` | Единый протокол (`protocol.json`) для сервера и Godot-клиента |
 | `config/client_config.json` | Конфигурация Godot-клиента |
+| `data/rb/` | Данные региона РБ: города, ресурсы, транспорт, контур ([README](data/rb/README.md)) |
 | `scripts/`, `scenes/`, `project.godot` | Godot 4 клиент |
 | `.env.example` | Переменные окружения сервера (локальные безопасные значения) |
 | `docker-compose.yml` | PostgreSQL только для локальной разработки/тестов |
@@ -53,9 +54,10 @@ npm test
    ```bash
    godot --headless --path . --script res://tests/godot/net_check.gd
    ```
-5. Проверка карты (нужны запущенный сервер и виртуальный экран):
+5. Проверка карты и региона (нужны запущенный сервер и виртуальный экран):
    ```bash
    xvfb-run -a godot --path . --rendering-driver opengl3 --script res://tests/godot/map_check.gd
+   xvfb-run -a godot --path . --rendering-driver opengl3 --script res://tests/godot/region_check.gd
    ```
 6. При экспорте в Android добавьте `*.json` в фильтр ресурсов экспорта (Export → Resources → Filters to export non-resource files),
    иначе `config/client_config.json` и `protocol/protocol.json` не попадут в APK.

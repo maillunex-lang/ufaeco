@@ -1,5 +1,5 @@
 class_name CityMapView
-extends Node2D
+extends PanZoomNode2D
 ## Изометрическая городская карта (стиль Capitalism 2): тайлы земли, дороги, река, участки и застройка.
 ## Спрайты — Kenney, CC0 (assets/art/iso/CREDITS.md). Здания на участках пока декоративные.
 ## Управление: перетаскивание — сдвиг, колесо/щипок — масштаб, касание/клик по участку — выбор.
@@ -8,10 +8,7 @@ signal lot_selected(lot: Dictionary)
 
 const HALF_W := 66.0   # половина ширины ромба тайла (132 px)
 const HALF_H := 33.0   # половина высоты ромба (66 px)
-const MIN_ZOOM := 0.12
-const MAX_ZOOM := 1.6
 const START_ZOOM := 0.42
-const TAP_SLOP := 10.0
 const DIR := "res://assets/art/iso/"
 
 # Наборы зданий по зонам (номера buildingTiles_NNN из Kenney Isometric Buildings #1).
@@ -46,14 +43,12 @@ var _lots_by_id := {}
 var _grid_lot := {}
 var _objects: Array = [] # [depth, gx, Texture2D, Vector2 pos, Vector2 scale, Color tint]
 var _labels: Array = [] # [Vector2 anchor, String text]
-var _dragging := false
-var _moved := 0.0
-var _touches := {}
-var _pinch_start_dist := 0.0
-var _pinch_start_zoom := 1.0
+# Оверлей: "" — нет, "land" — стоимость земли, "traffic" — трафик покупателей.
+var overlay: String = ""
 
 
 func _init() -> void:
+	tapped.connect(_tap)
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	for n in ["ground_grass", "water", "road", "bridge", "park_tree", "lot_empty"]:
 		_tex[n] = load(DIR + n + ".png")
@@ -188,6 +183,8 @@ func _draw() -> void:
 	for lot in city["lots"]:
 		var owned = lot.get("owner_company_id") != null
 		var sel: bool = lot["id"] == selected_lot_id
+		if overlay != "":
+			_draw_heat(lot)
 		if not owned and not sel:
 			continue
 		var x := float(lot["x"])
@@ -201,6 +198,31 @@ func _draw() -> void:
 	_draw_labels()
 
 
+## Тепловая карта участка: чем ярче, тем дороже земля / оживлённее трафик (как оверлеи в Capitalism).
+func _draw_heat(lot: Dictionary) -> void:
+	var v := int(lot.get("land_value" if overlay == "land" else "traffic", 0))
+	if lot["zone"] == "park" and overlay == "land":
+		return
+	var col: Color
+	if v < 25:
+		return
+	elif v < 55:
+		col = Color(1.0, 0.92, 0.3, 0.5)
+	elif v < 80:
+		col = Color(1.0, 0.6, 0.15, 0.6)
+	else:
+		col = Color(0.9, 0.2, 0.15, 0.68)
+	var x := float(lot["x"])
+	var y := float(lot["y"])
+	var pts := PackedVector2Array([iso(x, y), iso(x + float(lot["w"]), y), iso(x + float(lot["w"]), y + float(lot["h"])), iso(x, y + float(lot["h"]))])
+	draw_colored_polygon(pts, col)
+
+
+func set_overlay(name: String) -> void:
+	overlay = name
+	queue_redraw()
+
+
 func _draw_labels() -> void:
 	var font := ThemeDB.fallback_font
 	for l in _labels:
@@ -212,74 +234,9 @@ func _draw_labels() -> void:
 		draw_string(font, r.position + Vector2(10, size.y - 2), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, BashPalette.TEAL_DEEP)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if city.is_empty():
-		return
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			_zoom_at(mb.position, 1.12)
-		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			_zoom_at(mb.position, 1.0 / 1.12)
-		elif mb.button_index == MOUSE_BUTTON_LEFT:
-			if mb.pressed:
-				_dragging = true
-				_moved = 0.0
-			else:
-				if _dragging and _moved < TAP_SLOP:
-					_tap(mb.position)
-				_dragging = false
-	elif event is InputEventMouseMotion and _dragging:
-		var mm := event as InputEventMouseMotion
-		position += mm.relative
-		_moved += mm.relative.length()
-	elif event is InputEventScreenTouch:
-		var st := event as InputEventScreenTouch
-		if st.pressed:
-			_touches[st.index] = st.position
-			if _touches.size() == 1:
-				_moved = 0.0
-			elif _touches.size() == 2:
-				_pinch_start_dist = _touch_distance()
-				_pinch_start_zoom = scale.x
-		else:
-			var was_single := _touches.size() == 1
-			_touches.erase(st.index)
-			if was_single and _moved < TAP_SLOP:
-				_tap(st.position)
-	elif event is InputEventScreenDrag:
-		var sd := event as InputEventScreenDrag
-		_touches[sd.index] = sd.position
-		if _touches.size() == 1:
-			position += sd.relative
-			_moved += sd.relative.length()
-		elif _touches.size() == 2 and _pinch_start_dist > 0.0:
-			var target := clampf(_pinch_start_zoom * _touch_distance() / _pinch_start_dist, MIN_ZOOM, MAX_ZOOM)
-			_zoom_at(_touch_center(), target / scale.x)
-			position += sd.relative * 0.5
-			_moved += TAP_SLOP
-
-
-func _touch_distance() -> float:
-	var pts := _touches.values()
-	return (pts[0] as Vector2).distance_to(pts[1] as Vector2)
-
-
-func _touch_center() -> Vector2:
-	var pts := _touches.values()
-	return ((pts[0] as Vector2) + (pts[1] as Vector2)) / 2.0
-
-
-func _zoom_at(screen_pos: Vector2, factor: float) -> void:
-	var new_zoom := clampf(scale.x * factor, MIN_ZOOM, MAX_ZOOM)
-	var f := new_zoom / scale.x
-	position = screen_pos - (screen_pos - position) * f
-	scale = Vector2(new_zoom, new_zoom)
-
-
 ## Экран → сетка (обратная изометрическая проекция).
 func grid_at(screen_pos: Vector2) -> Vector2i:
-	var local := (screen_pos - position) / scale.x
+	var local := to_map(screen_pos)
 	var u := local.x / HALF_W
 	var v := local.y / HALF_H
 	return Vector2i(floori((u + v) / 2.0), floori((v - u) / 2.0))

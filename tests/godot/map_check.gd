@@ -10,6 +10,8 @@ func _initialize() -> void:
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await create_timer(3.0).timeout
+	main._open_city("ufa")
+	await create_timer(1.5).timeout
 	var mv = main.map_view
 	var z0: float = mv.scale.x
 	var p0: Vector2 = mv.position

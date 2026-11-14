@@ -18,11 +18,26 @@ export interface Lot {
   base_price_cents: number; // цена «в нормальных условиях»
   price_cents: number; // текущая (меняется с ростом города)
   development: number; // 0 — пустырь, 1..3 — застроено городом (не продаётся)
+  land_value: number; // 0..100 — оверлей «стоимость земли»
+  traffic: number; // 0..100 — оверлей «трафик покупателей»
   /** Только при загрузке из БД: участок принадлежит компании (город на нём не строит). */
   owned?: boolean;
 }
 
+/** Параметры города, влияющие на цены и вместимость. */
+export interface CityParams {
+  /** базовая цена тайла, копейки */
+  landBaseCents: number;
+  /** жителей на тайл жилой застройки за уровень */
+  capacityPerTile: number;
+  /** есть ли река (вертикальная, извилистая) */
+  river: boolean;
+}
+
+export const DEFAULT_PARAMS: CityParams = { landBaseCents: 2_000_000, capacityPerTile: 4, river: true };
+
 export interface CityState {
+  params: CityParams;
   cityId: string;
   seed: number;
   width: number;
@@ -37,9 +52,6 @@ export const MAX_DEVELOPMENT = 3;
 export const MAX_LOTS = 1400;
 const MARGIN = 2;
 const DIRS: [number, number][] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-
-// Цена за тайл по зонам, копейки (гипотезы).
-const PRICE_PER_TILE: Record<Zone, number> = { residential: 2_000_000, commercial: 5_000_000, industrial: 1_500_000, park: 0 };
 
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -78,14 +90,15 @@ export function zoneAt(st: CityState, cx: number, cy: number): Zone {
   const m = vnoise(cx / 6, cy / 6, st.seed + 23);
   const river = riverX(st, cy);
   if (d < 6 + n * 6) return 'commercial';
-  if (cx > river + 3 && d > 11) return 'industrial';
+  if (st.params.river ? cx > river + 3 && d > 11 : cx > st.center.x + st.width * 0.22 && d > 11) return 'industrial';
   if (m < 0.27 && d > 14) return 'industrial';
-  if (Math.abs(cx - river) <= 4 && hash2(cx >> 1, cy >> 1, st.seed + 5) < 0.4) return 'park';
+  if (st.params.river && Math.abs(cx - river) <= 4 && hash2(cx >> 1, cy >> 1, st.seed + 5) < 0.4) return 'park';
   if (m > 0.8 && d > 8) return 'park';
   return 'residential';
 }
 
-function riverX(st: Pick<CityState, 'seed' | 'width'>, y: number): number {
+function riverX(st: Pick<CityState, 'seed' | 'width' | 'params'>, y: number): number {
+  if (!st.params.river) return -1000;
   const base = st.width * 0.68;
   return Math.round(base + Math.sin(y / 6 + (st.seed % 17)) * 3 + (vnoise(y / 5, 0.5, st.seed + 3) - 0.5) * 6);
 }
@@ -142,9 +155,9 @@ class Grid {
   }
 }
 
-export function createState(cityId: string, seed: number, width = 84, height = 64): CityState {
+export function createState(cityId: string, seed: number, width = 84, height = 64, params: CityParams = DEFAULT_PARAMS): CityState {
   const st: CityState = {
-    cityId, seed, width, height, center: { x: Math.round(width * 0.42), y: Math.round(height * 0.5) },
+    params, cityId, seed, width, height, center: { x: Math.round(width * 0.42), y: Math.round(height * 0.5) },
     tiles: [], lots: [], nextLotSeq: 1,
   };
   for (let y = 0; y < height; y++) {
@@ -255,13 +268,31 @@ function commitStreet(g: Grid, path: [number, number][]) {
 
 const SIZES: [number, number][] = [[2, 2], [2, 2], [3, 2], [2, 3], [3, 3], [1, 2], [2, 1], [3, 1], [1, 3], [1, 1]];
 
+const ZONE_LAND: Record<Zone, number> = { commercial: 1.0, residential: 0.8, industrial: 0.5, park: 0.4 };
+const ZONE_TRAFFIC: Record<Zone, number> = { commercial: 1.0, residential: 0.55, industrial: 0.3, park: 0.5 };
+
+/** Оверлеи участка (0..100): центральность города × зона + детерминированный шум. */
+export function lotOverlays(st: CityState, x: number, y: number, w: number, h: number, zone: Zone): { land_value: number; traffic: number } {
+  const cx = x + w / 2, cy = y + h / 2;
+  const reach = 0.36 * Math.hypot(st.width, st.height);
+  const c = Math.max(0, Math.min(1, 1 - distToCenter(st, cx, cy) / reach));
+  const n = (hash2(x, y, st.seed + 31) - 0.5) * 10;
+  const clamp = (v: number) => Math.max(1, Math.min(100, Math.round(v)));
+  return {
+    land_value: clamp(100 * (0.15 + 0.85 * Math.pow(c, 1.3)) * ZONE_LAND[zone] + n),
+    traffic: clamp(100 * (0.1 + 0.9 * Math.pow(c, 1.5)) * ZONE_TRAFFIC[zone] + n),
+  };
+}
+
+export const lotPrice = (landBaseCents: number, area: number, landValue: number, zone: Zone): number =>
+  zone === 'park' ? 0 : Math.round(landBaseCents * area * (0.35 + 1.65 * (landValue / 100)));
+
 function addLot(g: Grid, x: number, y: number, w: number, h: number): Lot {
   const st = g.st;
   const zone = zoneAt(st, x + w / 2, y + h / 2);
-  const area = w * h;
-  const d = distToCenter(st, x + w / 2, y + h / 2);
-  const price = Math.round(PRICE_PER_TILE[zone] * area * (1 + Math.max(0, 1 - d / 28) * 0.8));
-  const lot: Lot = { id: `${st.cityId}-${st.nextLotSeq++}`, x, y, w, h, zone, base_price_cents: price, price_cents: price, development: 0 };
+  const ov = lotOverlays(st, x, y, w, h, zone);
+  const price = lotPrice(st.params.landBaseCents, w * h, ov.land_value, zone);
+  const lot: Lot = { id: `${st.cityId}-${st.nextLotSeq++}`, x, y, w, h, zone, base_price_cents: price, price_cents: price, development: 0, ...ov };
   st.lots.push(lot);
   g.mark(lot, st.lots.length);
   return lot;
@@ -329,8 +360,14 @@ export function growStreets(st: CityState, rng: () => number, streets: number): 
 }
 
 /** Стартовый город: центр с радиальными магистралями, затем рост до нужного числа участков. */
-export function generateInitialCity(cityId: string, seed: number, targetLots = 140): CityState {
-  const st = createState(cityId, seed);
+export interface CityPlanOptions {
+  width?: number;
+  height?: number;
+  params?: Partial<CityParams>;
+}
+
+export function generateInitialCity(cityId: string, seed: number, targetLots = 140, opts: CityPlanOptions = {}): CityState {
+  const st = createState(cityId, seed, opts.width ?? 84, opts.height ?? 64, { ...DEFAULT_PARAMS, ...opts.params });
   const rng = mulberry32(seed);
   const g = new Grid(st);
   const c: [number, number] = [st.center.x, st.center.y];
